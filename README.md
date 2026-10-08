@@ -365,5 +365,4 @@ The final license will be selected and published before the first source-code re
 
 ---
 
-**EADE - Learning from corrections. Evolving through knowledge.**#   E A D E  
- 
+**EADE - Learning from corrections. Evolving through knowledge.**
