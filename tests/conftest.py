@@ -30,3 +30,10 @@ def box_iou(a, b) -> float:
 
 def box_area(a) -> float:
     return (a[2] - a[0]) * (a[3] - a[1])
+
+
+@pytest.fixture(scope="session")
+def survey(tmp_path_factory):
+    pytest.importorskip("rasterio")
+    from synthetic import make_survey
+    return make_survey(tmp_path_factory.mktemp("survey"))

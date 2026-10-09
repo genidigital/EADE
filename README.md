@@ -12,7 +12,7 @@ The project initially focuses on geospatial object detection for cadastral and l
 
 🚧 **Early Development**
 
-The core engine and the geospatial adapter are implemented and tested: rule-based decisions with explanations, knowledge versions, learning from validated examples, evaluation, and detection on drone surveys. The review workflow, the server, the QGIS plugin and the desktop application are in progress. Capabilities described below as planned may evolve.
+The core engine and the geospatial adapter are implemented and tested: rule-based decisions with explanations, knowledge versions, learning from validated examples, evaluation, and detection on drone surveys. The project workspace with its review workflow and the REST server are implemented too. The QGIS plugin and the desktop application are in progress. Capabilities described below as planned may evolve.
 
 ## Vision
 
@@ -143,8 +143,9 @@ eade
 ├── io        knowledge files (native format, eade-version/1 import)
 ├── geo       rasters and vectors through GDAL, candidate detection from
 │             DSM/DTM/orthophoto, feature extraction, IoU, evaluation grid
-├── store     projects, campaigns, corrections, audit          (planned)
-├── server    REST API and OGC API Features                   (planned)
+├── store     workspace file: campaigns, corrections, examples,
+│             versions, evaluations, audit (SQLite, tamper-proof)
+├── server    REST API and OGC API Features
 └── ml        machine-learning providers                      (planned)
 ```
 
@@ -157,8 +158,8 @@ eade
 | Vector processing | GDAL through pyogrio, Shapely 2, pyproj |
 | Formats | GeoTIFF / COG, GeoPackage, GeoJSON, Shapefile, FlatGeobuf |
 | Server storage | PostgreSQL / PostGIS (planned) |
-| Local storage | SQLite / GeoPackage (planned) |
-| API | REST / JSON, OGC API Features (planned) |
+| Local storage | SQLite workspace file (`.eade`) |
+| API | FastAPI: REST / JSON, OGC API Features |
 | Desktop and plugin | Qt, QGIS plugin (planned) |
 | Future AI | PyTorch / ONNX |
 
@@ -270,6 +271,12 @@ eade geo detect --dsm dsm.tif --dtm dtm.tif --ortho ortho.tif                 --
 eade knowledge show knowledge.json --catalog catalog.json
 eade knowledge import export.json -o knowledge.json
 eade geo catalog -o catalog.json
+
+# Serve a project to QGIS, the desktop app or another platform
+pip install -e ".[server]"
+eade workspace create songon.eade
+eade serve songon.eade                       # http://127.0.0.1:8765/docs
+eade serve songon.eade --host 0.0.0.0 --tokens tokens.json
 ```
 
 Without `--knowledge`, the classic verdicts are kept as they are. The output layer holds every candidate with its decision, score, the rules that fired and the full explanation.

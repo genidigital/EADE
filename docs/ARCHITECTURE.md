@@ -50,8 +50,8 @@ app gives exactly the same results inside QGIS or behind the REST API.
 |---|---|---|
 | 1 | `eade.core`: features, rule language, decision engine, signatures, knowledge versions and files (native + `eade-version/1` import), learning, evaluation, CLI | done |
 | 2 | `eade.geo`: raster/vector I/O, CRS handling, tiling, candidate detection from DSM/DTM/orthophoto, feature extraction, IoU and measures, grid split | done |
-| 3 | `eade.store` + `eade.server`: local project database, campaigns, corrections and audit; FastAPI REST API and jobs | next |
-| 4 | QGIS plugin: Processing provider and review dock | planned |
+| 3 | `eade.store` + `eade.server`: local project database, campaigns, corrections and audit; FastAPI REST API and jobs | done |
+| 4 | QGIS plugin: Processing provider and review dock | next |
 | 5 | EADE Studio desktop app (Qt) and Windows installer | planned |
 | 6 | ArcGIS Pro toolbox, OGC API Features publication, ML provider interface | planned |
 
@@ -62,6 +62,9 @@ src/eade/
   core/        domain-agnostic engine
   io/          knowledge file formats
   geo/         geospatial adapter: rasters, vectors, detection, features
+  store/       workspace file (.eade, SQLite): campaigns, predictions, corrections,
+               examples, versions, evaluations, audit; guarantees enforced by triggers
+  server/      REST API (/api/v1) and OGC API Features (/ogc)
   cli.py       `eade` command
 tests/         pytest suite
 docs/          landing page and design documents

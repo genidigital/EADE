@@ -114,6 +114,26 @@ def cmd_geo_catalog(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_workspace_create(args: argparse.Namespace) -> int:
+    from .store import Workspace
+
+    Workspace.create(args.path).close()
+    print(f"workspace created: {args.path}")
+    return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from .server import create_app, load_tokens
+
+    tokens = load_tokens(args.tokens)
+    if tokens is None and args.host not in ("127.0.0.1", "localhost"):
+        raise ValueError("without --tokens the server has no authentication: listen on 127.0.0.1 only")
+    uvicorn.run(create_app(args.workspace, tokens), host=args.host, port=args.port, log_level="info")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="eade", description="EADE adaptive detection engine")
     p.add_argument("--version", action="version", version=f"eade {__version__}")
@@ -158,6 +178,19 @@ def build_parser() -> argparse.ArgumentParser:
     gc = gs.add_parser("catalog", help="print the geo feature dictionary as JSON")
     gc.add_argument("-o", "--output", default="-")
     gc.set_defaults(func=cmd_geo_catalog)
+
+    w = sub.add_parser("workspace", help="project files")
+    ws = w.add_subparsers(dest="action", required=True)
+    wc = ws.add_parser("create", help="create an empty workspace file (.eade)")
+    wc.add_argument("path")
+    wc.set_defaults(func=cmd_workspace_create)
+
+    sv = sub.add_parser("serve", help="serve a workspace over REST and OGC API Features (needs eade[server])")
+    sv.add_argument("workspace")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=8765)
+    sv.add_argument("--tokens", help='JSON file {"<token>": {"user": "...", "permissions": [...]}}')
+    sv.set_defaults(func=cmd_serve)
     return p
 
 

@@ -63,7 +63,7 @@ class HeightDetector:
         p = self.params
         for window, core in source.tiles(options.get("bounds"), p.tile_m, p.overlap_m):
             patch = source.read(window)
-            yield from self._detect_tile(patch, core)
+            yield from self.detect_tile(patch, core)
 
     def verdict(self, f: Mapping[str, Any]) -> tuple[bool, str | None]:
         """The classic decision and, when rejected, why."""
@@ -77,7 +77,8 @@ class HeightDetector:
             return False, "LOW"
         return True, None
 
-    def _detect_tile(self, patch: Patch, core: tuple[float, float, float, float]) -> Iterator[Candidate]:
+    def detect_tile(self, patch: Patch, core: tuple[float, float, float, float]) -> Iterator[Candidate]:
+        """Candidates whose centroid lies in `core`, measured on an already read patch."""
         p, res = self.params, patch.resolution
         ndsm = patch.ndsm
         mask = np.nan_to_num(ndsm, nan=-1.0) >= p.candidate_height_m

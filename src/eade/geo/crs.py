@@ -6,8 +6,8 @@ import math
 from functools import lru_cache
 
 from pyproj import CRS, Transformer
+import shapely
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import transform as shp_transform
 
 WGS84 = CRS.from_epsg(4326)
 
@@ -28,7 +28,7 @@ def reproject(geom: BaseGeometry, src, dst) -> BaseGeometry:
     if s == d:
         return geom
     t = _transformer(s.to_wkt(), d.to_wkt())
-    return shp_transform(t.transform, geom)
+    return shapely.transform(geom, lambda x, y: t.transform(x, y), interleaved=False)
 
 
 def require_metric(crs) -> CRS:
