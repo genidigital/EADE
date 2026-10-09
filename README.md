@@ -10,11 +10,9 @@ The project initially focuses on geospatial object detection for cadastral and l
 
 ## Project Status
 
-🚧 **Early Development - Architecture & MVP**
+🚧 **Early Development**
 
-EADE is currently in its initial development phase. The architecture and capabilities described below represent the project roadmap and may evolve.
-
-The first implementation will focus on rule-based geospatial detection and human-assisted improvement.
+The core engine and the geospatial adapter are implemented and tested: rule-based decisions with explanations, knowledge versions, learning from validated examples, evaluation, and detection on drone surveys. The review workflow, the server, the QGIS plugin and the desktop application are in progress. Capabilities described below as planned may evolve.
 
 ## Vision
 
@@ -136,64 +134,35 @@ Configuration options will include:
 
 ## Architecture
 
-EADE follows a modular architecture.
+EADE is one engine shipped in several forms: a Python package with a command line, a QGIS plugin, a desktop application with a Windows installer, and a REST server for other platforms. All of them share the same core, the same knowledge files and the same decisions. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ```text
-EADE
-│
-├── eade-core
-│   ├── Detection Engine
-│   ├── Feature Engine
-│   ├── Decision Engine
-│   └── Provider Registry
-│
-├── eade-knowledge
-│   ├── Knowledge Base
-│   ├── Rules
-│   ├── Object Signatures
-│   └── Similarity Matching
-│
-├── eade-adaptation
-│   ├── Feedback Analysis
-│   ├── Rule Optimization
-│   └── Knowledge Versioning
-│
-├── eade-feedback
-│   ├── Human Corrections
-│   ├── Review Workflow
-│   └── Validation History
-│
-├── eade-geo
-│   ├── Raster Processing
-│   ├── Vector Processing
-│   ├── Object Segmentation
-│   └── Spatial Feature Extraction
-│
-├── eade-api
-│   └── REST API
-│
-└── eade-ml
-    └── Future Machine Learning Integration
+eade
+├── core      pure Python, no dependency: features, rules, decision engine,
+│             signatures, knowledge versions, learning, evaluation
+├── io        knowledge files (native format, eade-version/1 import)
+├── geo       rasters and vectors through GDAL, candidate detection from
+│             DSM/DTM/orthophoto, feature extraction, IoU, evaluation grid
+├── store     projects, campaigns, corrections, audit          (planned)
+├── server    REST API and OGC API Features                   (planned)
+└── ml        machine-learning providers                      (planned)
 ```
-
-The initial architecture is designed to use Java and Spring Boot, with PostgreSQL as the knowledge store and PostGIS for geospatial operations.
 
 ## Technology Stack
 
-| Component | Planned Technology |
+| Component | Technology |
 |---|---|
-| Core engine | Java 17+ |
-| Framework | Spring Boot |
-| Database | PostgreSQL |
-| Geospatial database | PostGIS |
-| Image processing | OpenCV |
-| Raster processing | GDAL |
-| Geometry operations | JTS / GeoTools |
-| API | REST / JSON |
-| Frontend integration | Framework-independent |
-| Future AI | Python / PyTorch / ONNX |
+| Core engine | Python 3.10+, standard library only |
+| Raster processing | GDAL through rasterio, NumPy, SciPy |
+| Vector processing | GDAL through pyogrio, Shapely 2, pyproj |
+| Formats | GeoTIFF / COG, GeoPackage, GeoJSON, Shapefile, FlatGeobuf |
+| Server storage | PostgreSQL / PostGIS (planned) |
+| Local storage | SQLite / GeoPackage (planned) |
+| API | REST / JSON, OGC API Features (planned) |
+| Desktop and plugin | Qt, QGIS plugin (planned) |
+| Future AI | PyTorch / ONNX |
 
-The architecture is intended to remain modular so that application-specific dependencies do not become mandatory for the core engine.
+The core has no dependency so that it loads inside QGIS, ArcGIS Pro, a frozen desktop application or a server without conflicts. Geospatial libraries come with the `geo` extra.
 
 ## Detection Pipeline
 
@@ -279,35 +248,31 @@ Although developed initially for eFoncier Africa, EADE is designed to support ot
 
 ## Repository Structure
 
-The following structure is proposed for the initial implementation:
-
 ```text
-eade/
-├── README.md
-├── LICENSE
-├── CONTRIBUTING.md
-├── CODE_OF_CONDUCT.md
-├── CHANGELOG.md
-├── docs/
-├── examples/
-├── assets/
-│   └── logo/
-├── eade-core/
-├── eade-knowledge/
-├── eade-adaptation/
-├── eade-feedback/
-├── eade-geo/
-├── eade-api/
-└── tests/
+EADE/
+├── src/eade/        the Python package (core, io, geo, cli)
+├── tests/           pytest suite, including a synthetic drone survey
+├── docs/            landing page and design documents
+├── assets/          logo
+└── pyproject.toml
 ```
-
-This structure is a target architecture and does not imply that these modules are already implemented.
 
 ## Getting Started
 
-Installation instructions, required configuration, sample datasets, and API examples will be added when the first runnable version is available.
+```bash
+pip install -e ".[geo,dev]"     # from a clone of this repository
+pytest                          # run the test suite
 
-The initial development work will focus on the core detection contracts, knowledge-base schema, rule execution, and the first geospatial detection workflow.
+# Detect, measure and decide over a drone survey
+eade geo detect --dsm dsm.tif --dtm dtm.tif --ortho ortho.tif                 --parcels parcels.gpkg --parcel-id PARCELLE                 --knowledge knowledge.json -o predictions.gpkg
+
+# Inspect a knowledge version, or import one exported by eFoncier (eade-version/1)
+eade knowledge show knowledge.json --catalog catalog.json
+eade knowledge import export.json -o knowledge.json
+eade geo catalog -o catalog.json
+```
+
+Without `--knowledge`, the classic verdicts are kept as they are. The output layer holds every candidate with its decision, score, the rules that fired and the full explanation.
 
 ## Contributing
 

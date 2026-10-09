@@ -86,6 +86,34 @@ def cmd_decide(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_geo_detect(args: argparse.Namespace) -> int:
+    from .geo import GeoPipeline, RasterSources
+    from .geo.vector import write_results
+
+    version = knowledge_json.load(args.knowledge, keep_status=True) if args.knowledge else None
+    bounds = tuple(args.bounds) if args.bounds else None
+    run = GeoPipeline(version).run(RasterSources(args.dsm, args.dtm, args.ortho), bounds,
+                                   parcels=args.parcels, parcel_id_field=args.parcel_id)
+    n = write_results(args.output, run.results, run.crs, extra=["parcel_id"] if args.parcels else [])
+    if args.provenance:
+        Path(args.provenance).write_text(json.dumps(run.provenance, ensure_ascii=False, indent=2), encoding="utf-8")
+    c = run.counts()
+    print(f"{n} objects -> {args.output}  (accepted {c['ACCEPTED']} · review {c['REVIEW']} · "
+          f"rejected {c['REJECTED']})")
+    return 0
+
+
+def cmd_geo_catalog(args: argparse.Namespace) -> int:
+    from .geo import geo_catalog
+
+    text = json.dumps(geo_catalog().to_list(), ensure_ascii=False, indent=2)
+    if args.output == "-":
+        print(text)
+    else:
+        Path(args.output).write_text(text, encoding="utf-8")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="eade", description="EADE adaptive detection engine")
     p.add_argument("--version", action="version", version=f"eade {__version__}")
@@ -112,6 +140,24 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--candidates", default="-", help="JSON lines file, '-' for stdin")
     d.add_argument("-o", "--output", default="-")
     d.set_defaults(func=cmd_decide)
+
+    g = sub.add_parser("geo", help="geospatial detection (needs eade[geo])")
+    gs = g.add_subparsers(dest="action", required=True)
+    gd = gs.add_parser("detect", help="detect, measure and decide over a survey")
+    gd.add_argument("--dsm", help="surface model (GeoTIFF, COG...)")
+    gd.add_argument("--dtm", help="terrain model; estimated from the DSM when absent")
+    gd.add_argument("--ortho", help="orthophoto (RGB or RGBA)")
+    gd.add_argument("--parcels", help="parcel layer (GeoPackage, GeoJSON, Shapefile...)")
+    gd.add_argument("--parcel-id", help="parcel identifier field")
+    gd.add_argument("--knowledge", help="knowledge version; classic verdicts only when absent")
+    gd.add_argument("--bounds", type=float, nargs=4, metavar=("XMIN", "YMIN", "XMAX", "YMAX"),
+                    help="area of interest in the rasters' CRS")
+    gd.add_argument("-o", "--output", required=True, help="output layer: .gpkg, .geojson, .shp, .fgb")
+    gd.add_argument("--provenance", help="write the run's provenance JSON here")
+    gd.set_defaults(func=cmd_geo_detect)
+    gc = gs.add_parser("catalog", help="print the geo feature dictionary as JSON")
+    gc.add_argument("-o", "--output", default="-")
+    gc.set_defaults(func=cmd_geo_catalog)
     return p
 
 
