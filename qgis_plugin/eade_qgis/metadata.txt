@@ -1,0 +1,19 @@
+[general]
+name=EADE
+qgisMinimumVersion=3.34
+qgisMaximumVersion=4.99
+supportsQt6=True
+version=0.1.0
+author=GENI Digital
+description=Détection explicable et adaptative des bâtiments sur levés drone (MNS, MNT, orthophoto).
+about=EADE (eFoncier Adaptive Detection Engine) détecte les bâtiments sur un levé drone, explique chaque décision par des règles et des mesures, et progresse à partir des corrections validées par des experts. Le plugin ajoute des algorithmes de traitement (détection, mesure, évaluation, campagne) et un atelier de correction et de validation relié à un projet EADE (.eade). Aucune dépendance à installer : le moteur est embarqué et utilise le GDAL de QGIS.
+tracker=https://github.com/genidigital/EADE/issues
+repository=https://github.com/genidigital/EADE
+homepage=https://genidigital.github.io/EADE/
+category=Raster
+icon=icon.png
+experimental=True
+deprecated=False
+hasProcessingProvider=yes
+tags=detection,buildings,bâtiments,cadastre,drone,dsm,orthophoto,explainable,human-in-the-loop,machine learning
+changelog=0.1.0 Première version : algorithmes de traitement et atelier de correction.

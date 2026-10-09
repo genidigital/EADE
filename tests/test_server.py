@@ -5,7 +5,7 @@ import time
 import pytest
 
 pytest.importorskip("fastapi")
-pytest.importorskip("rasterio")
+pytest.importorskip("eade.geo")
 
 from fastapi.testclient import TestClient
 from shapely.geometry import box, mapping

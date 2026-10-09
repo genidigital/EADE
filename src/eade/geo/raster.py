@@ -9,19 +9,14 @@ window: a gigapixel orthophoto is never loaded whole.
 from __future__ import annotations
 
 import math
-from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
 import numpy as np
-import rasterio
-from rasterio.enums import Resampling
-from rasterio.transform import Affine
-from rasterio.warp import reproject
-from rasterio.windows import Window, from_bounds
 from scipy import ndimage
 
+from .backend import Affine, Dataset, Window, open_raster, window_from_bounds, window_transform
 from .crs import require_metric
 
 GROUND_WINDOW_M = 30.0  # without a terrain model, ground is estimated over this distance
@@ -73,22 +68,29 @@ class OpenSources:
 
     def __init__(self, sources: RasterSources):
         self.sources = sources
-        self._stack = ExitStack()
-        self.dsm = self.dtm = self.ortho = None
+        self.dsm: Dataset | None = None
+        self.dtm: Dataset | None = None
+        self.ortho: Dataset | None = None
 
     def __enter__(self) -> "OpenSources":
         s = self.sources
-        self.dsm = self._stack.enter_context(rasterio.open(s.dsm)) if s.dsm else None
-        self.dtm = self._stack.enter_context(rasterio.open(s.dtm)) if s.dtm else None
-        self.ortho = self._stack.enter_context(rasterio.open(s.ortho)) if s.ortho else None
-        require_metric(self.reference.crs)
+        try:
+            self.dsm = open_raster(s.dsm) if s.dsm else None
+            self.dtm = open_raster(s.dtm) if s.dtm else None
+            self.ortho = open_raster(s.ortho) if s.ortho else None
+            require_metric(self.reference.crs)
+        except BaseException:
+            self.__exit__()
+            raise
         return self
 
     def __exit__(self, *exc) -> None:
-        self._stack.close()
+        for ds in (self.dsm, self.dtm, self.ortho):
+            if ds is not None:
+                ds.close()
 
     @property
-    def reference(self):
+    def reference(self) -> Dataset:
         return self.dsm if self.dsm is not None else self.ortho
 
     @property
@@ -97,49 +99,41 @@ class OpenSources:
 
     @property
     def resolution(self) -> float:
-        return float(abs(self.reference.transform.a))
+        return self.reference.transform.resolution
 
     def full_bounds(self) -> tuple[float, float, float, float]:
-        b = self.reference.bounds
-        return b.left, b.bottom, b.right, b.top
+        return self.reference.bounds()
 
     # -------------------------------------------------------------- reading
 
     def window_for(self, bounds: tuple[float, float, float, float], pad_m: float = 0.0) -> Window:
         x0, y0, x1, y1 = bounds
-        w = from_bounds(x0 - pad_m, y0 - pad_m, x1 + pad_m, y1 + pad_m, self.reference.transform)
-        return w.round_offsets(op="floor").round_lengths(op="ceil")
+        return window_from_bounds((x0 - pad_m, y0 - pad_m, x1 + pad_m, y1 + pad_m), self.reference.transform)
 
     def read(self, window: Window, ground_m: float = GROUND_WINDOW_M) -> Patch:
         ref = self.reference
-        transform = ref.window_transform(window)
-        h, w = int(window.height), int(window.width)
-        rows = np.arange(int(window.row_off), int(window.row_off) + h)
-        cols = np.arange(int(window.col_off), int(window.col_off) + w)
+        transform = window_transform(ref.transform, window)
+        h, w = window.height, window.width
+        rows = np.arange(window.row_off, window.row_off + h)
+        cols = np.arange(window.col_off, window.col_off + w)
         inside = ((rows >= 0) & (rows < ref.height))[:, None] & ((cols >= 0) & (cols < ref.width))[None, :]
+
+        def on_grid(ds: Dataset, band: int, resampling: str = "bilinear") -> np.ndarray:
+            if ds is ref:
+                return ds.read(band, window)
+            return ds.warp(band, transform, ref.crs, (h, w), resampling)
 
         dsm = ndsm = rgb = None
         if self.dsm is not None:
-            dsm = _read_band(self.dsm, window, boundless=True)
-            if self.dtm is not None:
-                dtm = self._warp(self.dtm, 1, transform, (h, w), Resampling.bilinear)
-            else:
-                dtm = estimate_ground(dsm, self.resolution, ground_m)
+            dsm = on_grid(self.dsm, 1)
+            dtm = on_grid(self.dtm, 1) if self.dtm is not None else estimate_ground(dsm, self.resolution, ground_m)
             ndsm = dsm - dtm
         if self.ortho is not None:
-            if self.ortho is ref:
-                rgb = np.stack([_read_band(self.ortho, window, b, boundless=True) for b in (1, 2, 3)])
-            else:
-                rgb = np.stack([self._warp(self.ortho, b, transform, (h, w), Resampling.bilinear)
-                                for b in (1, 2, 3)])
-            rgb = _apply_alpha(self.ortho, rgb, window if self.ortho is ref else None, transform, (h, w), self)
+            rgb = np.stack([on_grid(self.ortho, b) for b in (1, 2, 3)])
+            if self.ortho.count >= 4:  # alpha band: transparent pixels carry no colour
+                alpha = on_grid(self.ortho, 4, "nearest")
+                rgb[:, ~(alpha > 0)] = np.nan
         return Patch(transform, ref.crs, self.resolution, dsm, ndsm, rgb, inside)
-
-    def _warp(self, ds, band: int, transform: Affine, shape: tuple[int, int], resampling) -> np.ndarray:
-        out = np.full(shape, np.nan, dtype="float32")
-        reproject(source=rasterio.band(ds, band), destination=out, src_nodata=ds.nodata,
-                  dst_transform=transform, dst_crs=self.crs, dst_nodata=np.nan, resampling=resampling)
-        return out
 
     def tiles(self, bounds: tuple[float, float, float, float] | None = None,
               tile_m: float = 200.0, overlap_m: float = 20.0) -> Iterator[tuple[Window, tuple[float, float, float, float]]]:
@@ -159,20 +153,6 @@ class OpenSources:
                 core = (x0 + i * tile_m, y0 + j * tile_m,
                         min(x1, x0 + (i + 1) * tile_m), min(y1, y0 + (j + 1) * tile_m))
                 yield self.window_for(core, overlap_m), core
-
-
-def _read_band(ds, window: Window, band: int = 1, boundless: bool = False) -> np.ndarray:
-    a = ds.read(band, window=window, boundless=boundless, masked=True)
-    return np.ma.filled(a.astype("float32"), np.nan)
-
-
-def _apply_alpha(ds, rgb, window, transform, shape, src: OpenSources) -> np.ndarray:
-    """Blank pixels marked transparent by an alpha band or by nodata."""
-    if ds.count >= 4:
-        alpha = (_read_band(ds, window, 4, boundless=True) if window is not None
-                 else src._warp(ds, 4, transform, shape, Resampling.nearest))
-        rgb[:, ~(alpha > 0)] = np.nan
-    return rgb
 
 
 def estimate_ground(dsm: np.ndarray, resolution: float, window_m: float = GROUND_WINDOW_M) -> np.ndarray:

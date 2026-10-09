@@ -5,7 +5,7 @@ import json
 import numpy as np
 import pytest
 
-pytest.importorskip("rasterio")
+pytest.importorskip("eade.geo")
 
 from shapely.geometry import box
 

@@ -43,8 +43,8 @@ def cmd_show(args: argparse.Namespace) -> int:
     print(f"v{v.number}  {v.label}  [{v.status.value}]")
     print(f"fingerprint  {v.fingerprint()}")
     print(f"thresholds   reject <= {cfg.reject_threshold:g} < review < {cfg.accept_threshold:g} <= accept")
-    print(f"weights      classic {cfg.classic_weight:g} · rules {cfg.rules_weight:g} · similarity "
-          f"{cfg.similarity_weight:g}" + "".join(f" · {r.name} {r.weight:g}" for r in cfg.ramps))
+    print(f"weights      classic {cfg.classic_weight:g} | rules {cfg.rules_weight:g} | similarity "
+          f"{cfg.similarity_weight:g}" + "".join(f" | {r.name} {r.weight:g}" for r in cfg.ramps))
     print(f"signatures   {len(v.signatures)}   profiles {len(v.profiles)}   rules {len(v.rules)}")
     for r in v.rules:
         state = "" if r.active else "  (inactive)"
@@ -82,7 +82,7 @@ def cmd_decide(args: argparse.Namespace) -> int:
         for result in engine.decide_all(_read_candidates(args.candidates)):
             counts[result.decision.value] = counts.get(result.decision.value, 0) + 1
             out.write(json.dumps(result.explanation(), ensure_ascii=False) + "\n")
-    print(" · ".join(f"{k.lower()} {v}" for k, v in sorted(counts.items())) or "no candidates", file=sys.stderr)
+    print(", ".join(f"{k.lower()} {v}" for k, v in sorted(counts.items())) or "no candidates", file=sys.stderr)
     return 0
 
 
@@ -98,7 +98,7 @@ def cmd_geo_detect(args: argparse.Namespace) -> int:
     if args.provenance:
         Path(args.provenance).write_text(json.dumps(run.provenance, ensure_ascii=False, indent=2), encoding="utf-8")
     c = run.counts()
-    print(f"{n} objects -> {args.output}  (accepted {c['ACCEPTED']} · review {c['REVIEW']} · "
+    print(f"{n} objects -> {args.output}  (accepted {c['ACCEPTED']}, review {c['REVIEW']}, "
           f"rejected {c['REJECTED']})")
     return 0
 

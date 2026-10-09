@@ -13,12 +13,11 @@ from dataclasses import asdict, dataclass
 from typing import Any, Iterator, Mapping
 
 import numpy as np
-from rasterio.features import shapes
 from scipy import ndimage
-from shapely.geometry import shape
 from shapely.validation import make_valid
 
 from ..core.decision import Candidate
+from .backend import polygonize
 from .extract import GeoFeatureExtractor
 from .raster import OpenSources, Patch, RasterSources
 
@@ -95,8 +94,8 @@ class HeightDetector:
         labels = np.where(keep[labels], labels, 0).astype("int32")
 
         cx0, cy0, cx1, cy1 = core
-        for geom_json, value in shapes(labels, mask=labels > 0, transform=patch.transform):
-            geom = make_valid(shape(geom_json)).simplify(p.simplify_m, preserve_topology=True)
+        for raw, _ in polygonize(labels, patch.transform):
+            geom = make_valid(raw).simplify(p.simplify_m, preserve_topology=True)
             if geom.geom_type == "GeometryCollection":
                 polys = [g for g in geom.geoms if g.geom_type in ("Polygon", "MultiPolygon")]
                 if not polys:

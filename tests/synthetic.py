@@ -8,8 +8,7 @@ Scene (heights above a flat 100 m ground):
 """
 
 import numpy as np
-import rasterio
-from rasterio.transform import from_origin
+from pyproj import CRS
 from shapely.geometry import box
 
 RES = 0.1
@@ -49,16 +48,32 @@ def make_survey(d):
     dsm[tree] = 105 + rng.normal(0, 0.4, tree.sum())
     rgb[:, tree] = np.array([40, 120, 40], dtype="uint8")[:, None]
 
-    profile = dict(driver="GTiff", width=N, height=N, crs="EPSG:32630",
-                   transform=from_origin(X0, Y0, RES, RES))
-    paths = {}
-    for name, arr in (("dsm", dsm), ("dtm", dtm)):
-        paths[name] = d / f"{name}.tif"
-        with rasterio.open(paths[name], "w", count=1, dtype="float32", nodata=-9999, **profile) as ds:
-            ds.write(arr.astype("float32"), 1)
-    paths["ortho"] = d / "ortho.tif"
-    with rasterio.open(paths["ortho"], "w", count=3, dtype="uint8", **profile) as ds:
-        ds.write(rgb)
+    paths = {"dsm": d / "dsm.tif", "dtm": d / "dtm.tif", "ortho": d / "ortho.tif"}
+    write_tif(paths["dsm"], dsm[None].astype("float32"), nodata=-9999)
+    write_tif(paths["dtm"], dtm[None].astype("float32"), nodata=-9999)
+    write_tif(paths["ortho"], rgb)
     return paths
 
 
+def write_tif(path, bands, nodata=None):
+    """A north-up GeoTIFF in EPSG:32630, with rasterio or else GDAL's own bindings."""
+    count, h, w = bands.shape
+    try:
+        import rasterio
+        from rasterio.transform import from_origin
+        with rasterio.open(path, "w", driver="GTiff", width=w, height=h, count=count, dtype=bands.dtype.name,
+                           crs="EPSG:32630", transform=from_origin(X0, Y0, RES, RES), nodata=nodata) as ds:
+            ds.write(bands)
+    except ImportError:
+        from osgeo import gdal
+        gdal.UseExceptions()
+        types = {"float32": gdal.GDT_Float32, "uint8": gdal.GDT_Byte}
+        ds = gdal.GetDriverByName("GTiff").Create(str(path), w, h, count, types[bands.dtype.name])
+        ds.SetGeoTransform((X0, RES, 0.0, Y0, 0.0, -RES))
+        ds.SetProjection(CRS.from_epsg(32630).to_wkt())
+        for i in range(count):
+            b = ds.GetRasterBand(i + 1)
+            if nodata is not None:
+                b.SetNoDataValue(nodata)
+            b.WriteArray(bands[i])
+        ds = None

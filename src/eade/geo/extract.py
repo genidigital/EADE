@@ -6,13 +6,13 @@ import math
 from typing import Any, Iterable, Mapping
 
 import numpy as np
-from rasterio.features import geometry_mask
 from scipy import ndimage
 from shapely.geometry import Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.strtree import STRtree
 
 from ..core.features import FeatureCatalog
+from .backend import pixel_mask
 from .catalog import EXTRACTOR_VERSION, geo_catalog
 from .geometry import shape_features
 from .raster import OpenSources, Patch
@@ -111,9 +111,9 @@ def _crop(patch: Patch, geom: BaseGeometry, pad_px: int = 3) -> tuple[Patch, np.
                 None if patch.ndsm is None else patch.ndsm[sl],
                 None if patch.rgb is None else patch.rgb[:, sl[0], sl[1]],
                 patch.inside_raster[sl])
-    mask = geometry_mask([geom], out_shape=(r1 - r0, c1 - c0), transform=t, invert=True, all_touched=False)
+    mask = pixel_mask(geom, (r1 - r0, c1 - c0), t)
     if not mask.any():  # very small objects: take every touched pixel
-        mask = geometry_mask([geom], out_shape=(r1 - r0, c1 - c0), transform=t, invert=True, all_touched=True)
+        mask = pixel_mask(geom, (r1 - r0, c1 - c0), t, all_touched=True)
     return sub, mask
 
 

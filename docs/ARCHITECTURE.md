@@ -29,6 +29,9 @@ app gives exactly the same results inside QGIS or behind the REST API.
 
 ## Principles
 
+- **Raster I/O adapts to the host.** `eade.geo` reads rasters through rasterio when it
+  is installed, and through GDAL's own bindings otherwise (QGIS, ArcGIS Pro), so the
+  plugin needs nothing installed and never loads a second GDAL.
 - **The core has no dependency.** It must load inside QGIS, ArcGIS Pro, a frozen
   desktop executable or a server without conflicts. Heavy libraries (GDAL,
   rasterio, numpy, shapely) live in `eade.geo`, installed with the `[geo]` extra.
@@ -51,8 +54,8 @@ app gives exactly the same results inside QGIS or behind the REST API.
 | 1 | `eade.core`: features, rule language, decision engine, signatures, knowledge versions and files (native + `eade-version/1` import), learning, evaluation, CLI | done |
 | 2 | `eade.geo`: raster/vector I/O, CRS handling, tiling, candidate detection from DSM/DTM/orthophoto, feature extraction, IoU and measures, grid split | done |
 | 3 | `eade.store` + `eade.server`: local project database, campaigns, corrections and audit; FastAPI REST API and jobs | done |
-| 4 | QGIS plugin: Processing provider and review dock | next |
-| 5 | EADE Studio desktop app (Qt) and Windows installer | planned |
+| 4 | QGIS plugin (QGIS 3.34+ and 4.x): Processing algorithms detect, measure, evaluate, campaign; workshop dock for correction and validation; engine embedded, GDAL backend | done |
+| 5 | EADE Studio desktop app (Qt) and Windows installer | next |
 | 6 | ArcGIS Pro toolbox, OGC API Features publication, ML provider interface | planned |
 
 ## Layout
@@ -65,6 +68,8 @@ src/eade/
   store/       workspace file (.eade, SQLite): campaigns, predictions, corrections,
                examples, versions, evaluations, audit; guarantees enforced by triggers
   server/      REST API (/api/v1) and OGC API Features (/ogc)
+qgis_plugin/   the QGIS plugin (eade_qgis) and its headless QGIS tests
+scripts/       build_qgis_plugin.py, make_demo.py
   cli.py       `eade` command
 tests/         pytest suite
 docs/          landing page and design documents

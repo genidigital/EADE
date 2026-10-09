@@ -34,6 +34,6 @@ def box_area(a) -> float:
 
 @pytest.fixture(scope="session")
 def survey(tmp_path_factory):
-    pytest.importorskip("rasterio")
+    pytest.importorskip("eade.geo")
     from synthetic import make_survey
     return make_survey(tmp_path_factory.mktemp("survey"))

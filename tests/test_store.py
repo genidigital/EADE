@@ -4,7 +4,7 @@ import sqlite3
 
 import pytest
 
-pytest.importorskip("rasterio")
+pytest.importorskip("eade.geo")
 
 from shapely.geometry import box
 

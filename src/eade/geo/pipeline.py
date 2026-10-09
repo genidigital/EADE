@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from shapely.geometry.base import BaseGeometry
 
 from ..core.decision import Decision, Engine, Result
 from ..core.knowledge import KnowledgeVersion
+from .backend import backend_name
 from .catalog import geo_catalog
 from .detect import HeightDetector
 from .extract import ParcelIndex
@@ -44,27 +45,40 @@ class GeoPipeline:
 
     def run(self, sources: RasterSources, bounds: tuple[float, float, float, float] | None = None,
             parcels: Iterable[tuple[Any, BaseGeometry]] | str | None = None,
-            parcel_id_field: str | None = None) -> PipelineResult:
+            parcel_id_field: str | None = None,
+            progress: Callable[[int, int], bool | None] | None = None) -> PipelineResult:
+        """Detect and decide. `progress(done, total)` is called after each tile; returning False stops."""
         started = datetime.now(timezone.utc)
         results: list[Result] = []
+        cancelled = False
         with sources.open() as opened:
+            if opened.dsm is None:
+                raise ValueError("the height detector needs a surface model (DSM)")
             crs = opened.crs
             index = None
             if isinstance(parcels, str):
                 parcels = [(pid, g) for pid, g, _ in read_features(parcels, crs, parcel_id_field)]
             if parcels is not None:
                 index = ParcelIndex(parcels)
-            for cand in self.detector.candidates(opened, {"bounds": bounds}):
-                if index is not None:
-                    ctx, parcel_id = index.context(cand.geometry)
-                    cand = replace(cand, features={**cand.features, **ctx},
-                                   meta={**cand.meta, "parcel_id": parcel_id})
-                results.append(self.engine.decide(cand))
+            p = self.detector.params
+            tiles = list(opened.tiles(bounds, p.tile_m, p.overlap_m))
+            for i, (window, core) in enumerate(tiles):
+                for cand in self.detector.detect_tile(opened.read(window), core):
+                    if index is not None:
+                        ctx, parcel_id = index.context(cand.geometry)
+                        cand = replace(cand, features={**cand.features, **ctx},
+                                       meta={**cand.meta, "parcel_id": parcel_id})
+                    results.append(self.engine.decide(cand))
+                if progress is not None and progress(i + 1, len(tiles)) is False:
+                    cancelled = True
+                    break
         return PipelineResult(results, crs, {
             "started_at": started.isoformat(timespec="seconds"),
+            "cancelled": cancelled,
             "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "sources": sources.describe(),
             "detector": self.detector.describe(),
+            "raster_backend": backend_name(),
             "knowledge": {"version": self.version.number, "label": self.version.label,
                           "fingerprint": self.engine.fingerprint},
         })

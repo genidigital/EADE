@@ -12,7 +12,7 @@ The project initially focuses on geospatial object detection for cadastral and l
 
 🚧 **Early Development**
 
-The core engine and the geospatial adapter are implemented and tested: rule-based decisions with explanations, knowledge versions, learning from validated examples, evaluation, and detection on drone surveys. The project workspace with its review workflow and the REST server are implemented too. The QGIS plugin and the desktop application are in progress. Capabilities described below as planned may evolve.
+The core engine and the geospatial adapter are implemented and tested: rule-based decisions with explanations, knowledge versions, learning from validated examples, evaluation, and detection on drone surveys. The project workspace with its review workflow and the REST server are implemented too. The QGIS plugin is available; the desktop application is in progress. Capabilities described below as planned may evolve.
 
 ## Vision
 
@@ -253,6 +253,8 @@ Although developed initially for eFoncier Africa, EADE is designed to support ot
 EADE/
 ├── src/eade/        the Python package (core, io, geo, cli)
 ├── tests/           pytest suite, including a synthetic drone survey
+├── qgis_plugin/     QGIS plugin (eade_qgis) and its tests in headless QGIS
+├── scripts/         plugin build, demo data
 ├── docs/            landing page and design documents
 ├── assets/          logo
 └── pyproject.toml
@@ -278,6 +280,14 @@ eade workspace create songon.eade
 eade serve songon.eade                       # http://127.0.0.1:8765/docs
 eade serve songon.eade --host 0.0.0.0 --tokens tokens.json
 ```
+
+### QGIS plugin
+
+```bash
+python scripts/build_qgis_plugin.py            # dist/eade_qgis-<version>.zip, engine included
+```
+
+In QGIS 3.34+ or 4.x: *Plugins > Manage and Install Plugins > Install from ZIP*. The plugin adds an **EADE** group to the Processing toolbox (detect, measure, evaluate, campaign) and a correction and validation workshop docked next to the map. It needs nothing else installed: it uses the GDAL that ships with QGIS. `python scripts/make_demo.py` writes a small survey to try it.
 
 Without `--knowledge`, the classic verdicts are kept as they are. The output layer holds every candidate with its decision, score, the rules that fired and the full explanation.
 
