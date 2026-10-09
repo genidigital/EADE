@@ -30,8 +30,16 @@ from . import layers
 
 REASONS = [("1", "Cour ou dalle au sol"), ("2", "Végétation"), ("3", "Ombre"), ("4", "Véhicule ou objet mobile"),
            ("5", "Appartient au voisin"), ("6", "Doublon"), ("7", "Chantier ou ruine"), ("8", "Autre")]
-CLASSES = ["BUILDING", "COURTYARD", "VEGETATION", "FENCE", "ROAD", "POOL", "OTHER"]
+CLASSES = [("BUILDING", "Bâtiment / toiture"), ("COURTYARD", "Cour / dalle"), ("VEGETATION", "Végétation"),
+           ("FENCE", "Clôture"), ("ROAD", "Voirie"), ("POOL", "Piscine"), ("OTHER", "Autre")]
+CLASS_FR = dict(CLASSES)
 DECISION_FR = {"ACCEPTED": "retenu", "REVIEW": "en revue", "REJECTED": "écarté"}
+STATUS_FR = {"TO_REVIEW": "à revoir", "IN_CORRECTION": "corrigé", "VALIDATED": "validé", "REJECTED": "rejeté"}
+REASON_FR = {"SLAB_OR_COURTYARD": "cour ou dalle", "VEGETATION": "végétation", "SHADOW": "ombre",
+             "VEHICLE_OR_MOBILE": "véhicule", "NEIGHBOUR": "voisin", "DUPLICATE": "doublon",
+             "CONSTRUCTION_OR_RUIN": "chantier ou ruine", "OTHER": "autre"}
+ACTION_FR = {"ACCEPT": "accepté", "REJECT": "rejeté", "REDRAW": "redessiné", "RECLASSIFY": "reclassé",
+             "SPLIT": "scindé", "MERGE": "fusionné", "ADD": "ajouté"}
 USER = Qt.ItemDataRole.UserRole
 
 
@@ -46,6 +54,7 @@ class AtelierDock(QDockWidget):
         self.ws = None
         self.campaign = None
         self.pred_layer = None
+        self.corr_layer = None
         self.draw_layer = None
         self._build()
 
@@ -111,7 +120,8 @@ class AtelierDock(QDockWidget):
 
         row = QHBoxLayout()
         self.cls = QComboBox()
-        self.cls.addItems(CLASSES)
+        for code, label in CLASSES:
+            self.cls.addItem(label, code)
         row.addWidget(self.cls)
         b = QPushButton("Reclasser")
         b.clicked.connect(lambda: self.act("RECLASSIFY"))
@@ -208,14 +218,18 @@ class AtelierDock(QDockWidget):
         self.campaign = self.ws.campaign(cid)
         crs = self.ws._crs(cid)
         project = QgsProject.instance()
-        for lyr in (self.pred_layer, self.draw_layer):
+        for lyr in (self.pred_layer, self.corr_layer, self.draw_layer):
             if lyr is not None and project.mapLayer(lyr.id()) is not None:
                 project.removeMapLayer(lyr.id())
+        corrections = self.ws.corrections(cid)
+        current = {c["prediction_id"]: c["action"] for c in corrections
+                   if c["prediction_id"] is not None and c["status"] != "REJECTED"}
         self.pred_layer = layers.predictions_layer(f"EADE – campagne {cid}", crs,
-                                                   self.ws.predictions(cid, limit=10 ** 9))
+                                                   self.ws.predictions(cid, limit=10 ** 9), current)
+        self.corr_layer = layers.corrections_layer(crs, corrections)
         self.draw_layer = layers.outlines_layer(crs)
-        layers.add_to_project(self.pred_layer)
-        layers.add_to_project(self.draw_layer)
+        for lyr in (self.pred_layer, self.corr_layer, self.draw_layer):
+            layers.add_to_project(lyr)
         self.refresh_queue()
         self.refresh_validation()
 
@@ -227,6 +241,8 @@ class AtelierDock(QDockWidget):
             text = f"{u['unit']}   {u['to_review']} à revoir"
             if u["undecided"]:
                 text += f" · {u['undecided']} en revue"
+            if u["drafts"]:
+                text += f" · {u['drafts']} brouillon(s) à soumettre"
             if u["submitted"]:
                 text += f" · {u['submitted']} soumise(s)"
             item = QListWidgetItem(text)
@@ -248,8 +264,9 @@ class AtelierDock(QDockWidget):
         preds = self._unit_predictions(item.data(USER))
         for p in sorted(preds, key=lambda p: (p["decision"] != "REVIEW", -(p["measure"] or 0))):
             score = "—" if p["score"] is None else f"{p['score']:.2f}"
-            it = QListWidgetItem(f"{p['final_class']} {p['measure']:.1f} m² · {DECISION_FR[p['decision']]} "
-                                 f"({score}) · {p['status'].lower()}")
+            it = QListWidgetItem(f"{CLASS_FR.get(p['final_class'], p['final_class'])} {p['measure']:.1f} m² · "
+                                 f"{DECISION_FR[p['decision']]} ({score}) · "
+                                 f"{STATUS_FR.get(p['status'], p['status'])}")
             it.setData(USER, p["id"])
             self.objects.addItem(it)
         self._zoom([p["geometry"] for p in preds])
@@ -280,7 +297,8 @@ class AtelierDock(QDockWidget):
         self.pred_layer.selectByIds(ids)
         e = p["explanation"]
         lines = [f"Prédiction #{pid} · parcelle {p['parcel_id'] or '—'}",
-                 f"Décision {DECISION_FR[p['decision']]} · score {e['score']} · classe {e['class']['final']}",
+                 f"Décision {DECISION_FR[p['decision']]} · score {e['score']} · "
+                 f"classe {CLASS_FR.get(e['class']['final'], e['class']['final'])}",
                  f"Moteur classique : {'retenu' if p['classic_accepted'] else 'rejeté'}"
                  + (f" ({p['classic_reason']})" if p["classic_reason"] else "")]
         for r in e["rules_fired"]:
@@ -345,7 +363,7 @@ class AtelierDock(QDockWidget):
             kwargs["features"] = self._guard(self.ws.measure, self.campaign["id"], geom)
         if action == "ADD":
             unit = self.queue.currentItem().data(USER) if self.queue.currentItem() else None
-            kwargs.update(campaign_id=self.campaign["id"], class_after=self.cls.currentText(),
+            kwargs.update(campaign_id=self.campaign["id"], class_after=self.cls.currentData(),
                           parcel_id=None if unit is None or unit.startswith("object:") else unit)
             pid = None
         elif pid is None:
@@ -353,18 +371,28 @@ class AtelierDock(QDockWidget):
         if action == "REJECT":
             kwargs["reason"] = self.reason.currentData()
         if action == "RECLASSIFY":
-            kwargs["class_after"] = self.cls.currentText()
+            kwargs["class_after"] = self.cls.currentData()
         done = self._guard(lambda: self.ws.correct(self.actor, action, prediction_id=pid, **kwargs))
         if done is None:
             return
         if fid is not None:
             self._consume(fid)
         if pid is not None:
-            layers.set_status(self.pred_layer, {pid}, "IN_CORRECTION")
-        self.iface.messageBar().pushSuccess("EADE", f"{action.lower()} enregistré")
+            layers.set_correction(self.pred_layer, {pid}, "IN_CORRECTION", action)
+        if action in ("REDRAW", "ADD"):
+            self._refresh_corrections()
+        self.iface.messageBar().pushSuccess("EADE", f"Objet {ACTION_FR[action]} (brouillon)")
         row = self.objects.currentRow()
         self.open_unit(self.queue.currentItem())
         self.objects.setCurrentRow(min(row + 1, self.objects.count() - 1))
+
+    def _refresh_corrections(self) -> None:
+        project = QgsProject.instance()
+        if self.corr_layer is not None and project.mapLayer(self.corr_layer.id()) is not None:
+            project.removeMapLayer(self.corr_layer.id())
+        self.corr_layer = layers.corrections_layer(self.ws._crs(self.campaign["id"]),
+                                                   self.ws.corrections(self.campaign["id"]))
+        layers.add_to_project(self.corr_layer)
 
     def submit(self) -> None:
         if self.ws is None or self.campaign is None or self.queue.currentItem() is None:
@@ -388,8 +416,10 @@ class AtelierDock(QDockWidget):
         for c in self.ws.corrections(self.campaign["id"], "SUBMITTED"):
             before = f"{c['measure_before']:.1f}" if c["measure_before"] else "—"
             after = f"{c['measure_after']:.1f}" if c["measure_after"] else "—"
-            text = (f"{c['action'].lower()} · {c['class_before'] or ''} → {c['class_after'] or ''} · "
-                    f"{before} → {after} m² · {c['reason'] or ''} · par {c['author']}")
+            cls_b = CLASS_FR.get(c["class_before"], c["class_before"] or "")
+            cls_a = CLASS_FR.get(c["class_after"], c["class_after"] or "")
+            text = (f"{ACTION_FR[c['action']]} · {cls_b} → {cls_a} · "
+                    f"{before} → {after} m² · {REASON_FR.get(c['reason'], c['reason'] or '')} · par {c['author']}")
             it = QListWidgetItem(text)
             it.setData(USER, c["id"])
             self.pending.addItem(it)

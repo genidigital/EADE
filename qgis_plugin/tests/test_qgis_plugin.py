@@ -105,3 +105,31 @@ def test_campaign_then_workshop(survey, tmp_path):
     dock.close()
     for lid in list(QgsProject.instance().mapLayers()):
         QgsProject.instance().removeMapLayer(lid)
+
+
+def test_campaign_cancel_stops_between_tiles(survey, tmp_path):
+    from qgis.core import QgsProcessingContext, QgsProcessingFeedback
+    from eade.store import Workspace
+
+    class CancelAfterFirstTile(QgsProcessingFeedback):
+        def setProgress(self, value):
+            super().setProgress(value)
+            if value > 0:
+                self.cancel()
+
+    path = str(tmp_path / "cancel.eade")
+    alg = QgsApplication.processingRegistry().createAlgorithmById("eade:campaign")
+    params = {"WORKSPACE": path, "LABEL": "x", "DSM": str(survey["dsm"]), "DTM": str(survey["dtm"]),
+              "OUTPUT": "memory:"}
+    # 10 m tiles: the 40 m survey makes 16 tiles, so cancelling after the first one leaves most undone
+    from eade.geo.detect import DetectorParams, HeightDetector
+    defaults = HeightDetector.__init__.__defaults__
+    HeightDetector.__init__.__defaults__ = (DetectorParams(tile_m=10.0, overlap_m=8.0), None)
+    try:
+        processing.run(alg, params, feedback=CancelAfterFirstTile(), context=QgsProcessingContext())
+    finally:
+        HeightDetector.__init__.__defaults__ = defaults
+    ws = Workspace(path)
+    c = ws.campaign(1)
+    ws.close()
+    assert c["status"] == "CANCELLED" and c["tiles_done"] < c["tiles_total"]

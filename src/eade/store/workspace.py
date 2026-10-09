@@ -550,28 +550,40 @@ class Workspace:
 
     def review_queue(self, campaign_id: int, order: str = "uncertainty", limit: int = 200) -> list[dict[str, Any]]:
         """Parcels to review. `uncertainty` first shows where the engine could not decide;
-        `random` gives a sample that includes easy cases, the honest way to measure quality."""
+        `random` gives a sample that includes easy cases, the honest way to measure quality.
+
+        A parcel stays in the queue while it has objects to review or draft corrections not yet
+        submitted, so an operator can always come back to finish and submit it.
+        """
         rows = self._q(
             "SELECT COALESCE(parcel_id, 'object:' || id) AS unit, "
             "SUM(status = 'TO_REVIEW') AS to_review, SUM(decision = 'REVIEW') AS undecided, "
             "MIN(ABS(COALESCE(score, 0.5) - 0.475)) AS closest, COUNT(*) AS objects "
             "FROM predictions WHERE campaign_id = ? AND decision <> 'REJECTED' "
-            "GROUP BY unit HAVING to_review > 0", (campaign_id,))
-        units = [dict(r) for r in rows]
+            "GROUP BY unit", (campaign_id,))
+        counts: dict[str, dict[str, int]] = {}
+        for r in self._q(
+                "SELECT COALESCE(c.parcel_id, 'object:' || c.prediction_id) AS unit, c.status, COUNT(*) AS n "
+                "FROM corrections c WHERE c.campaign_id = ? AND c.status IN ('DRAFT', 'SUBMITTED') "
+                "GROUP BY unit, c.status", (campaign_id,)):
+            counts.setdefault(r["unit"], {})[r["status"]] = r["n"]
+        units = {r["unit"]: dict(r) for r in rows}
+        for unit in counts:  # a parcel with only added objects has no prediction of its own
+            units.setdefault(unit, {"unit": unit, "to_review": 0, "undecided": 0, "closest": 1.0, "objects": 0})
+        for u in units.values():
+            u["drafts"] = counts.get(u["unit"], {}).get("DRAFT", 0)
+            u["submitted"] = counts.get(u["unit"], {}).get("SUBMITTED", 0)
+        units = [u for u in units.values() if u["to_review"] > 0 or u["drafts"] > 0]
         if order == "uncertainty":
             units.sort(key=lambda u: (-u["undecided"], u["closest"], u["unit"]))
         elif order == "random":
             import random
+            units.sort(key=lambda u: u["unit"])
             random.Random(campaign_id).shuffle(units)
         elif order == "order":
             units.sort(key=lambda u: u["unit"])
         else:
             raise Invalid("order must be uncertainty, random or order")
-        submitted = {r["parcel_id"]: r["n"] for r in self._q(
-            "SELECT parcel_id, COUNT(*) AS n FROM corrections WHERE campaign_id = ? AND status = 'SUBMITTED' "
-            "GROUP BY parcel_id", (campaign_id,))}
-        for u in units:
-            u["submitted"] = submitted.get(u["unit"], 0)
         return units[:limit]
 
     # ========================================================= corrections

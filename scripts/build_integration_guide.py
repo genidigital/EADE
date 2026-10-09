@@ -145,11 +145,12 @@ def table(header, rows, widths, mono_cols=(), bold_first=False, pad=3.5):
 # -------------------------------------------------------------- document
 
 class Guide(BaseDocTemplate):
-    def __init__(self, path, **kw):
+    def __init__(self, path, header="GUIDE D'INTÉGRATION EADE", title="Guide d'intégration EADE",
+                 subject="Intégrer le moteur de détection adaptatif EADE", **kw):
         super().__init__(str(path), pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm,
-                         topMargin=22 * mm, bottomMargin=20 * mm, title="Guide d'intégration EADE",
-                         author="GENI Digital", subject="Intégrer le moteur de détection adaptatif EADE",
-                         creator="EADE build_integration_guide.py", **kw)
+                         topMargin=22 * mm, bottomMargin=20 * mm, title=title,
+                         author="GENI Digital", subject=subject, creator="EADE guide builder", **kw)
+        self.header = header
         w, h = A4
         cover = Frame(0, 0, w, h, leftPadding=24 * mm, rightPadding=24 * mm, topPadding=30 * mm, bottomPadding=20 * mm,
                       id="cover")
@@ -200,7 +201,7 @@ class Guide(BaseDocTemplate):
         canv.line(20 * mm, h - 14 * mm, w - 20 * mm, h - 14 * mm)
         canv.setFont("Mono", 7.4)
         canv.setFillColor(SOFT)
-        canv.drawString(20 * mm, h - 11.5 * mm, "GUIDE D'INTÉGRATION EADE")
+        canv.drawString(20 * mm, h - 11.5 * mm, doc.header)
         canv.drawRightString(w - 20 * mm, h - 11.5 * mm, f"version {eade.__version__}")
         canv.line(20 * mm, 13 * mm, w - 20 * mm, 13 * mm)
         canv.drawString(20 * mm, 9 * mm, "GENI Digital · document de travail, susceptible d'évoluer avec le code")

@@ -176,3 +176,14 @@ def test_emergency_stop_and_import(ws, survey):
     assert ws.settings()["enabled"] == 0
     with pytest.raises(Invalid):
         ws.emergency_stop(LOCAL, "")
+
+
+def test_parcel_stays_in_queue_until_its_drafts_are_submitted(ws, survey):
+    c = run(ws, survey)
+    first = ws.review_queue(c["id"])[0]["unit"]  # no parcels here: units are single objects
+    assert first.startswith("object:")
+    ws.correct(LOCAL, "ACCEPT", prediction_id=int(first[7:]))
+    unit = next(u for u in ws.review_queue(c["id"]) if u["unit"] == first)
+    assert unit["to_review"] == 0 and unit["drafts"] == 1
+    ws.submit(LOCAL, c["id"])
+    assert first not in {u["unit"] for u in ws.review_queue(c["id"])}

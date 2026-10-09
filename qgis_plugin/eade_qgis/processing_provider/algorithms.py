@@ -317,7 +317,16 @@ class CampaignAlgorithm(_Base):
                                    parcel_id_field=self.parameterAsString(parameters, "PARCEL_ID", context) or None,
                                    apply_eade=self.parameterAsBoolean(parameters, "APPLY", context))
             feedback.pushInfo(f"Campagne {c['id']} : EADE {'appliqué (v%s)' % c['version_number'] if c['eade_applied'] else 'non appliqué'}")
-            c = ws.run_campaign(actor, c["id"], progress=lambda d, t: feedback.setProgress(100.0 * d / t))
+            cid = c["id"]
+
+            def progress(done, total):
+                feedback.setProgress(100.0 * done / total)
+                if feedback.isCanceled():  # stops between two tiles; what is written stays
+                    ws.cancel_campaign(actor, cid)
+
+            c = ws.run_campaign(actor, cid, progress=progress)
+            if c["status"] == "CANCELLED":
+                feedback.reportError(f"Campagne {cid} annulée : {c['counts']['total']} objets déjà enregistrés.")
             sink, dest = self.parameterAsSink(parameters, "OUTPUT", context, _fields(PREDICTION_FIELDS),
                                               multipolygon_type(), crs)
             for p in ws.predictions(c["id"], limit=10 ** 9):
