@@ -262,6 +262,9 @@ EADE/
 
 ## Getting Started
 
+The full integration guide (in French) covers every integration path, the REST API, the knowledge format and governance: [docs/EADE_Guide_integration.pdf](docs/EADE_Guide_integration.pdf). Rebuild it with `python scripts/build_integration_guide.py`.
+
+
 ```bash
 pip install -e ".[geo,dev]"     # from a clone of this repository
 pytest                          # run the test suite

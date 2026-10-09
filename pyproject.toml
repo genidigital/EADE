@@ -23,6 +23,7 @@ dependencies = []
 geo = ["numpy>=1.26", "scipy>=1.11", "rasterio>=1.3.9", "shapely>=2.0", "pyproj>=3.6", "pyogrio>=0.7"]
 server = ["eade[geo]", "fastapi>=0.110", "uvicorn[standard]>=0.29"]
 dev = ["pytest>=8", "httpx>=0.27"]
+docs = ["reportlab>=4"]
 
 [project.scripts]
 eade = "eade.cli:main"
