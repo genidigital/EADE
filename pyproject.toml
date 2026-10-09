@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eade"
+version = "0.1.0.dev0"
+description = "EADE - an explainable, knowledge-driven and adaptive detection engine."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "GENI Digital" }]
+keywords = ["detection", "gis", "geospatial", "cadastre", "explainable", "human-in-the-loop"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: GIS",
+]
+# The core engine has no runtime dependency on purpose: it must embed in QGIS,
+# ArcGIS Pro, a desktop app or a server without dragging a stack along.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+eade = "eade.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
