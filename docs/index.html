@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EADE</title>
+<meta name="description" content="EADE, eFoncier Adaptive Detection Engine : un moteur de détection géospatiale explicable qui progresse grâce aux corrections validées par des experts. En service dans eFoncier Africa.">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100,400;100,500;100,600;125,700;125,800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a survey sheet. Faint cadastral grid behind everything, content on a single 1160px frame.
+   The hero shows the real correction workshop; sections read like legend panels of a map. */
+:root {
+  --bg: #f4f7fa;
+  --surface: #ffffff;
+  --ink: #0b2551;          /* logo navy */
+  --ink-soft: #46597a;
+  --line: #d6dfea;
+  --grid: rgba(31, 111, 214, .07);
+  --blue: #1f6fd6;         /* logo mid blue */
+  --cyan: #12b6d8;         /* logo cyan */
+  --accent-ink: #ffffff;
+  --ok: #138a5b;
+  --warn: #b26a00;
+  --bad: #c2362b;
+  --mute: #8a97ab;
+
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --step-0: 1rem;
+  --step-1: 1.2rem;
+  --step-3: clamp(1.9rem, 1.3rem + 2.4vw, 2.8rem);
+  --step-4: clamp(2.4rem, 1.4rem + 4.2vw, 4.2rem);
+  --radius: 6px;
+  --max: 1160px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #07142c; --surface: #0c1d3d; --ink: #e6eefb; --ink-soft: #9fb2d1;
+    --line: #1d3359; --grid: rgba(18, 182, 216, .07);
+    --blue: #4c95f0; --cyan: #34cfee; --accent-ink: #04122a;
+    --ok: #3cc58c; --warn: #e6a23c; --bad: #f0705f; --mute: #6c7d99;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #07142c; --surface: #0c1d3d; --ink: #e6eefb; --ink-soft: #9fb2d1;
+  --line: #1d3359; --grid: rgba(18, 182, 216, .07);
+  --blue: #4c95f0; --cyan: #34cfee; --accent-ink: #04122a;
+  --ok: #3cc58c; --warn: #e6a23c; --bad: #f0705f; --mute: #6c7d99;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 3px; }
+
+.wrap { max-width: var(--max); margin-inline: auto; padding-inline: clamp(16px, 4vw, 40px); }
+
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.08; }
+h1, h2 { font-variation-settings: "wdth" 125; font-weight: 800; letter-spacing: -.01em; }
+h2 { font-size: var(--step-3); }
+h3 { font-size: var(--step-1); font-weight: 700; font-variation-settings: "wdth" 125; }
+p { margin: 0; }
+.lede { color: var(--ink-soft); font-size: var(--step-1); max-width: 60ch; }
+.eyebrow {
+  font-family: var(--f-mono); font-size: .78rem; text-transform: uppercase;
+  letter-spacing: .12em; color: var(--blue); display: flex; align-items: center; gap: .6rem;
+}
+.eyebrow::before { content: ""; width: 18px; height: 1px; background: currentColor; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+kbd {
+  font-family: var(--f-mono); font-size: .78rem; padding: .08rem .42rem; border-radius: 4px;
+  border: 1px solid var(--line); border-bottom-width: 2px; background: var(--surface); color: var(--ink);
+  white-space: nowrap;
+}
+
+/* ---------- nav ---------- */
+.nav {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.nav .wrap { display: flex; align-items: center; gap: 1.5rem; min-height: 64px; }
+.brand { display: flex; align-items: center; gap: .65rem; text-decoration: none; }
+.brand img { width: 44px; }
+.brand b { font-family: var(--f-display); font-variation-settings: "wdth" 125; font-weight: 800; font-size: 1.25rem; letter-spacing: .02em; }
+.nav ul { display: flex; gap: 1.3rem; list-style: none; margin: 0 0 0 auto; padding: 0; }
+.nav ul a { text-decoration: none; color: var(--ink-soft); font-size: .92rem; }
+.nav ul a:hover { color: var(--ink); }
+@media (max-width: 960px) { .nav ul { display: none; } .nav .btn { margin-left: auto; } }
+
+.btn {
+  display: inline-flex; align-items: center; gap: .55rem; text-decoration: none;
+  font: inherit; font-weight: 500; font-size: .95rem; padding: .7rem 1.1rem; border-radius: var(--radius);
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer;
+  transition: border-color .15s;
+}
+.btn:hover { border-color: var(--blue); }
+.btn.primary { background: var(--blue); border-color: var(--blue); color: var(--accent-ink); }
+.btn.primary:hover { background: color-mix(in srgb, var(--blue) 85%, var(--ink)); }
+.btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+/* ---------- hero ---------- */
+.hero { padding-block: clamp(3rem, 6vw, 5rem) clamp(2.5rem, 5vw, 4rem); }
+.hero .wrap { display: grid; grid-template-columns: .9fr 1.1fr; gap: clamp(2rem, 4.5vw, 4rem); align-items: center; }
+.hero-copy { display: grid; gap: 1.5rem; min-width: 0; }
+.hero h1 { font-size: var(--step-4); }
+.hero h1 em { font-style: normal; color: var(--blue); }
+.status {
+  display: inline-flex; align-items: center; gap: .55rem; width: fit-content;
+  font-family: var(--f-mono); font-size: .76rem; color: var(--ok);
+  border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent);
+  background: color-mix(in srgb, var(--ok) 8%, transparent);
+  padding: .3rem .75rem; border-radius: 99px;
+}
+.status i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.cta { display: flex; flex-wrap: wrap; gap: .8rem; }
+
+.shot {
+  margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 30px 60px -30px color-mix(in srgb, var(--ink) 40%, transparent);
+  overflow: hidden; min-width: 0;
+}
+.shot-bar { display: flex; align-items: center; gap: .4rem; padding: .55rem .8rem; border-bottom: 1px solid var(--line); }
+.shot-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.shot-bar span { margin-left: .5rem; font-family: var(--f-mono); font-size: .72rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shot figcaption { font-family: var(--f-mono); font-size: .72rem; color: var(--ink-soft); padding: .6rem .9rem; border-top: 1px solid var(--line); }
+@media (max-width: 960px) { .hero .wrap { grid-template-columns: 1fr; } }
+
+/* figures strip */
+.figures { border-block: 1px solid var(--line); background: var(--surface); }
+.figures .wrap { display: grid; grid-template-columns: repeat(4, 1fr); }
+.fig { padding: 1.5rem 1.2rem; display: grid; gap: .25rem; border-left: 1px solid var(--line); }
+.fig:first-child { border-left: 0; padding-left: 0; }
+.fig b { font-family: var(--f-display); font-variation-settings: "wdth" 125; font-weight: 800; font-size: clamp(1.7rem, 1.2rem + 1.6vw, 2.4rem); line-height: 1; font-variant-numeric: tabular-nums; }
+.fig span { color: var(--ink-soft); font-size: .88rem; }
+.figures-note { grid-column: 1 / -1; font-family: var(--f-mono); font-size: .7rem; color: var(--ink-soft); padding-bottom: 1rem; }
+@media (max-width: 760px) {
+  .figures .wrap { grid-template-columns: repeat(2, 1fr); }
+  .fig { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); }
+  .fig:nth-child(-n+2) { border-top: 0; }
+}
+
+/* ---------- sections ---------- */
+section.block { padding-block: clamp(3.5rem, 7vw, 6rem); border-top: 1px solid var(--line); }
+.figures + section.block { border-top: 0; }
+.sec-head { display: grid; gap: 1rem; margin-bottom: clamp(2rem, 4vw, 3rem); max-width: 780px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(1.5rem, 4vw, 3.5rem); align-items: start; }
+.two > * { min-width: 0; }
+@media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: clamp(1.1rem, 2.5vw, 1.6rem); }
+.panel-title { font-family: var(--f-mono); font-size: .74rem; text-transform: uppercase; letter-spacing: .12em; color: var(--ink-soft); margin-bottom: 1rem; }
+
+/* decision scale */
+.scale { display: grid; gap: .6rem; }
+.scale-bar { display: grid; grid-template-columns: 35fr 25fr 40fr; height: 46px; border-radius: 6px; overflow: hidden; gap: 2px; background: var(--surface); }
+.scale-bar div { display: flex; align-items: center; padding-inline: .7rem; font-weight: 600; font-size: .9rem; }
+.z-out { background: color-mix(in srgb, var(--mute) 22%, transparent); color: var(--ink); }
+.z-rev { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--ink); }
+.z-in { background: color-mix(in srgb, var(--blue) 22%, transparent); color: var(--ink); }
+.scale-ticks { position: relative; height: 1.3rem; font-family: var(--f-mono); font-size: .74rem; color: var(--ink-soft); }
+.scale-ticks span { position: absolute; transform: translateX(-50%); }
+.scale-ticks span:first-child { transform: none; }
+.scale-ticks span:last-child { transform: translateX(-100%); }
+.bands { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1.2rem; }
+.band { display: grid; gap: .3rem; align-content: start; padding-top: .8rem; border-top: 3px solid; }
+.band.out { border-color: var(--mute); } .band.rev { border-color: var(--warn); } .band.in { border-color: var(--blue); }
+.band b { font-weight: 600; }
+.band p { color: var(--ink-soft); font-size: .9rem; }
+@media (max-width: 600px) { .bands { grid-template-columns: 1fr; } .scale-bar div { font-size: .76rem; padding-inline: .4rem; } }
+
+.weights { list-style: none; margin: 0; padding: 0; display: grid; gap: .65rem; }
+.weights li { display: grid; grid-template-columns: 1fr 3rem; gap: .3rem 1rem; align-items: center; font-size: .92rem; }
+.weights .w { font-family: var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.weights .track { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.weights .track i { display: block; height: 100%; border-radius: 3px; background: var(--blue); }
+.never { list-style: none; padding: 0; margin: 0; display: grid; gap: .7rem; }
+.never li { display: grid; grid-template-columns: 20px 1fr; gap: .7rem; color: var(--ink-soft); font-size: .93rem; }
+.never svg { width: 18px; height: 18px; margin-top: .2rem; stroke: var(--bad); stroke-width: 2.2; fill: none; }
+.stack-col { display: grid; gap: 1.2rem; }
+
+/* prediction card */
+.pred { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.pred header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 1.2rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.pred header h3 { font-size: 1.05rem; }
+.pill { font-family: var(--f-mono); font-size: .72rem; padding: .18rem .6rem; border-radius: 99px; border: 1px solid currentColor; white-space: nowrap; }
+.pill.out { color: var(--mute); } .pill.rev { color: var(--warn); } .pill.in { color: var(--blue); }
+.pred .meta { padding: .8rem 1.2rem; font-family: var(--f-mono); font-size: .78rem; color: var(--ink-soft); border-bottom: 1px solid var(--line); }
+.chain { padding: 1rem 1.2rem; display: grid; gap: .7rem; border-bottom: 1px solid var(--line); font-size: .9rem; }
+.chain div { display: grid; grid-template-columns: 5.5rem 1fr; gap: .8rem; }
+.chain .who { font-family: var(--f-mono); font-size: .72rem; color: var(--ink-soft); padding-top: .15rem; }
+.feat { margin: 0; padding: .4rem 0; }
+.feat h4 { margin: 0; padding: .6rem 1.2rem .2rem; font-family: var(--f-mono); font-size: .7rem; letter-spacing: .12em; color: var(--blue); font-weight: 500; }
+.feat dl { margin: 0; display: grid; grid-template-columns: 1fr auto; }
+.feat dt, .feat dd { margin: 0; padding: .35rem 1.2rem; font-size: .86rem; border-bottom: 1px dashed var(--line); }
+.feat dt { color: var(--ink-soft); }
+.feat dd { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.groups { display: flex; flex-wrap: wrap; gap: .4rem; }
+.groups span { font-family: var(--f-mono); font-size: .76rem; padding: .2rem .55rem; border-radius: 4px; background: color-mix(in srgb, var(--blue) 10%, transparent); color: var(--blue); }
+.points { display: grid; gap: 1.3rem; }
+.points div { display: grid; gap: .3rem; padding-left: 1rem; border-left: 1px solid var(--line); }
+.points b { font-weight: 600; }
+.points p { color: var(--ink-soft); }
+
+/* cycle */
+.loop { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); counter-reset: s; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.loop li { counter-increment: s; padding: 1.3rem 1.2rem 1.4rem; display: grid; gap: .35rem; align-content: start; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.loop li:nth-child(4n) { border-right: 0; }
+.loop li:nth-last-child(-n+4) { border-bottom: 0; }
+.loop li::before { content: counter(s, decimal-leading-zero); font-family: var(--f-mono); font-size: .76rem; color: var(--blue); }
+.loop li[data-who]::before { content: counter(s, decimal-leading-zero) " · " attr(data-who); color: var(--warn); }
+.loop b { font-weight: 600; }
+.loop span { color: var(--ink-soft); font-size: .9rem; }
+@media (max-width: 900px) {
+  .loop { grid-template-columns: repeat(2, 1fr); }
+  .loop li { border-right: 1px solid var(--line) !important; border-bottom: 1px solid var(--line) !important; }
+  .loop li:nth-child(2n) { border-right: 0 !important; }
+  .loop li:nth-last-child(-n+2) { border-bottom: 0 !important; }
+}
+@media (max-width: 480px) {
+  .loop { grid-template-columns: 1fr; }
+  .loop li { border-right: 0 !important; border-bottom: 1px solid var(--line) !important; }
+  .loop li:last-child { border-bottom: 0 !important; }
+}
+.callouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1.2rem; }
+.callouts div { display: grid; gap: .3rem; padding: 1rem 1.1rem; border: 1px dashed var(--line); border-radius: var(--radius); }
+.callouts b { font-weight: 600; font-size: .95rem; }
+.callouts p { color: var(--ink-soft); font-size: .88rem; }
+@media (max-width: 900px) { .callouts { grid-template-columns: 1fr; } }
+
+/* tour (screenshot tabs) */
+.tabs { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+.tab {
+  font: inherit; font-size: .9rem; padding: .5rem .9rem; border-radius: 99px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
+}
+.tab:hover { color: var(--ink); border-color: var(--blue); }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.tour-pane { display: grid; grid-template-columns: 1fr 300px; gap: 1.5rem; align-items: start; }
+.tour-pane > * { min-width: 0; }
+.tour-text { display: grid; gap: .8rem; }
+.tour-text p { color: var(--ink-soft); font-size: .95rem; }
+.tour-text .who { font-family: var(--f-mono); font-size: .74rem; color: var(--blue); }
+@media (max-width: 900px) { .tour-pane { grid-template-columns: 1fr; } }
+
+/* keys */
+.keys { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.keys th, .keys td { text-align: left; padding: .55rem .6rem .55rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.keys th { font-family: var(--f-mono); font-weight: 400; font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-soft); }
+.keys td:first-child { font-weight: 500; white-space: nowrap; }
+.keys td:last-child { color: var(--ink-soft); }
+.motifs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: .55rem 1rem; font-size: .9rem; }
+.motifs li { display: flex; gap: .6rem; align-items: baseline; }
+.legend { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; font-size: .86rem; color: var(--ink-soft); margin-top: 1rem; }
+.legend span { display: inline-flex; align-items: center; gap: .45rem; }
+.legend i { width: 18px; height: 4px; border-radius: 2px; }
+@media (max-width: 480px) { .motifs { grid-template-columns: 1fr; } }
+
+/* lab chart */
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .tick { fill: var(--ink-soft); font-family: var(--f-mono); font-size: 11px; }
+.chart .lab { fill: var(--ink); font-size: 13px; font-family: var(--f-body); }
+.chart .sub { fill: var(--ink-soft); font-size: 11px; font-family: var(--f-mono); }
+.chart .val { fill: var(--ink); font-family: var(--f-mono); font-size: 12px; font-weight: 500; }
+.chart .bar { fill: var(--mute); }
+.chart .bar.best { fill: var(--blue); }
+.chart .bar.base { fill: color-mix(in srgb, var(--blue) 45%, var(--mute)); }
+.chart .thr { stroke: var(--warn); stroke-width: 2; stroke-dasharray: 4 3; }
+.chart .thr-t { fill: var(--warn); font-family: var(--f-mono); font-size: 11px; }
+.chart g.row:hover .bar { opacity: .85; }
+.metrics { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.metrics td { padding: .55rem .5rem .55rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.metrics td:first-child { font-weight: 500; white-space: nowrap; }
+.metrics td:nth-child(2) { color: var(--ink-soft); }
+.metrics td:last-child { font-family: var(--f-mono); font-size: .76rem; color: var(--ink-soft); text-align: right; white-space: nowrap; }
+.criteria { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; font-size: .92rem; }
+.criteria li { display: grid; grid-template-columns: 20px 1fr; gap: .6rem; }
+.criteria svg { width: 18px; height: 18px; margin-top: .2rem; fill: none; stroke: var(--ok); stroke-width: 2.4; }
+.story { border-left: 3px solid var(--warn); padding: .2rem 0 .2rem 1rem; display: grid; gap: .4rem; }
+.story b { font-weight: 600; }
+.story p { color: var(--ink-soft); font-size: .93rem; }
+
+/* guards + roles */
+.guards { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.guards th, .guards td { text-align: left; padding: .7rem 1rem .7rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.guards th { font-family: var(--f-mono); font-weight: 400; font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-soft); }
+.guards td:first-child { color: var(--bad); }
+.guards td:last-child { color: var(--ink-soft); }
+.scroll { overflow-x: auto; }
+.roles { display: grid; gap: .6rem; }
+.role { display: grid; grid-template-columns: 9.5rem 1fr; gap: .8rem; font-size: .9rem; padding-bottom: .6rem; border-bottom: 1px solid var(--line); }
+.role:last-child { border-bottom: 0; padding-bottom: 0; }
+.role code { font-family: var(--f-mono); font-size: .78rem; color: var(--blue); padding-top: .1rem; }
+.role span { color: var(--ink-soft); }
+.role span b { color: var(--ink); font-weight: 500; }
+@media (max-width: 480px) { .role { grid-template-columns: 1fr; gap: .1rem; } }
+
+/* integrations */
+.plugs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.plug { background: var(--surface); padding: 1.3rem 1.2rem; display: grid; gap: .35rem; align-content: start; }
+.plug-k { font-family: var(--f-mono); font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--blue); }
+.plug b { font-weight: 600; }
+.plug p { color: var(--ink-soft); font-size: .9rem; }
+.plugs-note { margin-top: 1rem; font-family: var(--f-mono); font-size: .74rem; color: var(--ink-soft); }
+@media (max-width: 900px) { .plugs { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .plugs { grid-template-columns: 1fr; } }
+
+/* vision */
+.now-next { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2.5rem; }
+.now-next > div { border: 1px solid var(--line); border-radius: 10px; padding: 1.3rem; display: grid; gap: .8rem; align-content: start; background: var(--surface); }
+.now-next .tag { font-family: var(--f-mono); font-size: .74rem; }
+.now-next .done .tag { color: var(--ok); }
+.now-next .todo { background: transparent; border-style: dashed; }
+.now-next .todo .tag { color: var(--blue); }
+.now-next ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .35rem; color: var(--ink-soft); font-size: .92rem; }
+@media (max-width: 760px) { .now-next { grid-template-columns: 1fr; } }
+.modules { display: grid; grid-template-columns: repeat(4, 1fr); gap: .8rem; }
+.mod { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 1rem 1.1rem; display: grid; gap: .3rem; align-content: start; }
+.mod code { font-family: var(--f-mono); font-size: .86rem; color: var(--blue); font-weight: 500; }
+.mod p { font-size: .86rem; color: var(--ink-soft); }
+.mod.later { background: transparent; border-style: dashed; }
+.mod.later code { color: var(--ink-soft); }
+@media (max-width: 900px) { .modules { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .modules { grid-template-columns: 1fr; } }
+.road { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 2.5rem; }
+.phase { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 1.4rem 1.3rem; display: grid; gap: .9rem; align-content: start; }
+.phase.now { border-color: var(--blue); box-shadow: inset 0 3px 0 var(--blue); }
+.phase .v { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.phase .v span { font-family: var(--f-display); font-variation-settings: "wdth" 125; font-weight: 800; font-size: 2rem; line-height: 1; }
+.phase .v small { font-family: var(--f-mono); font-size: .72rem; color: var(--ink-soft); }
+.phase.now .v small { color: var(--blue); }
+.phase ul { margin: 0; padding: 0; list-style: none; display: grid; gap: .45rem; font-size: .9rem; color: var(--ink-soft); }
+.phase li { padding-left: 1.1rem; position: relative; }
+.phase li::before { content: ""; position: absolute; left: 0; top: .6em; width: 7px; height: 7px; border: 1.5px solid var(--ink-soft); border-radius: 2px; }
+@media (max-width: 900px) { .road { grid-template-columns: 1fr; } }
+
+/* footer */
+footer { border-top: 1px solid var(--line); padding-block: 2.5rem; background: var(--surface); }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 1.5rem 3rem; justify-content: space-between; align-items: center; }
+footer .id { display: flex; gap: 1.2rem; align-items: center; }
+footer .id img { width: 120px; padding: .6rem; background: #ffffff; border-radius: 8px; border: 1px solid var(--line); }
+footer p { color: var(--ink-soft); font-size: .86rem; max-width: 56ch; }
+footer .motto { font-family: var(--f-display); font-variation-settings: "wdth" 125; font-weight: 700; color: var(--ink); font-size: 1rem; margin-bottom: .3rem; }
+
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="EADE, accueil"><img src="assets/eade-mark.png" alt="" width="44" height="29"><b>EADE</b></a>
+    <ul>
+      <li><a href="#decision">Décision</a></li>
+      <li><a href="#cycle">Cycle</a></li>
+      <li><a href="#plateforme">Plateforme</a></li>
+      <li><a href="#laboratoire">Laboratoire</a></li>
+      <li><a href="#garde-fous">Garde-fous</a></li>
+      <li><a href="#integrations">Intégrations</a></li>
+      <li><a href="#vision">Vision</a></li>
+    </ul>
+    <a class="btn" href="https://github.com/genidigital/EADE" target="_blank" rel="noopener">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-copy">
+        <span class="status"><i></i>En service dans eFoncier Africa</span>
+        <h1>Détecter. Corriger. <em>Apprendre</em> de chaque parcelle.</h1>
+        <p class="lede">EADE (eFoncier Adaptive Detection Engine) juge les bâtiments et clôtures détectés sur les levés drone. Il explique chaque décision, laisse l'humain trancher les cas douteux et ne progresse qu'à partir de corrections validées par un expert. Il est conçu pour s'intégrer à vos outils SIG et cartographiques.</p>
+        <div class="cta">
+          <a class="btn primary" href="#plateforme">Visiter la plateforme</a>
+          <a class="btn" href="https://github.com/genidigital/EADE" target="_blank" rel="noopener">Suivre le projet sur GitHub</a>
+        </div>
+      </div>
+      <figure class="shot">
+        <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>Détection › Atelier de correction</span></div>
+        <img src="assets/captures/atelier.webp" width="1400" height="875" alt="Atelier de correction d'eFoncier Africa : file des parcelles à revoir, orthophoto drone avec les emprises proposées, panneau d'actions sur l'objet sélectionné." fetchpriority="high">
+        <figcaption>Parcelle HT / 112 / 1091 · orthophoto drone Songon P1, 1,4 cm/px</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <div class="figures" aria-label="Chiffres des essais">
+    <div class="wrap">
+      <div class="fig"><b>33</b><span>caractéristiques mesurées par candidat</span></div>
+      <div class="fig"><b>3</b><span>issues : retenu, en revue, écarté</span></div>
+      <div class="fig"><b class="mono">0,591 → 0,720</b><span>IoU moyen avec une version apprise</span></div>
+      <div class="fig"><b>÷ 2</b><span>faux positifs avec cette même version</span></div>
+      <p class="figures-note">Chiffres des essais sur la base de démonstration (levé de Songon P1, octobre 2026), pas d'une production.</p>
+    </div>
+  </div>
+
+  <section class="block" id="decision">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Comment EADE décide</span>
+        <h2>Un score, deux seuils, et l'humain entre les deux.</h2>
+        <p class="lede">Le moteur classique lit le modèle numérique de surface, le modèle de terrain et l'orthophoto, îlot par îlot, et propose des emprises. EADE reprend chaque candidat, mesure ses caractéristiques, applique les règles de la version active et le compare aux cas déjà validés.</p>
+      </div>
+
+      <div class="panel scale">
+        <div class="scale-bar" role="img" aria-label="Échelle de score de 0 à 1 : écartée jusqu'à 0,35, en revue entre 0,35 et 0,60, retenue à partir de 0,60">
+          <div class="z-out">Écartée</div><div class="z-rev">En revue</div><div class="z-in">Retenue</div>
+        </div>
+        <div class="scale-ticks" aria-hidden="true"><span style="left:0">0</span><span style="left:35%">0,35</span><span style="left:60%">0,60</span><span style="left:100%">1</span></div>
+        <div class="bands">
+          <div class="band out"><b>Écartée · score ≤ 0,35</b><p>Arbre, ombre, cour… Le candidat reste visible en pointillé sur la carte.</p></div>
+          <div class="band rev"><b>En revue · entre 0,35 et 0,60</b><p>Le moteur ne tranche pas. Un opérateur décide, et ces cas passent en premier.</p></div>
+          <div class="band in"><b>Retenue · score ≥ 0,60</b><p>L'objet est proposé comme bâtiment ou clôture. Il reste à revoir dans l'atelier.</p></div>
+        </div>
+      </div>
+
+      <div class="two" style="margin-top:1.2rem">
+        <div class="panel">
+          <p class="panel-title">Poids livrés des composantes du score</p>
+          <ul class="weights">
+            <li><span>Décision du moteur classique</span><span class="w">1</span><span class="track"><i style="width:100%"></i></span></li>
+            <li><span>Règles pondérées</span><span class="w">1</span><span class="track"><i style="width:100%"></i></span></li>
+            <li><span>Similarité aux cas validés</span><span class="w">1</span><span class="track"><i style="width:100%"></i></span></li>
+            <li><span>Hauteur au-dessus du sol</span><span class="w">0,5</span><span class="track"><i style="width:50%"></i></span></li>
+          </ul>
+          <p style="color:var(--ink-soft);font-size:.88rem;margin-top:1rem">Le score est la moyenne pondérée des composantes disponibles. Une composante sans donnée est omise. Ce n'est pas une probabilité : il se compare aux seuils, réglables par version de connaissance.</p>
+        </div>
+        <div class="panel">
+          <p class="panel-title">Ce qu'EADE ne fait jamais</p>
+          <ul class="never">
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Créer un contour. Il juge les candidats du moteur classique ; les bâtiments oubliés s'ajoutent à la main.</span></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Repêcher au-delà de la revue. Un candidat écarté par le moteur classique peut au mieux passer « en revue ».</span></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Écrire hors de ses propres tables : ni barème, ni valeur cadastrale, ni parcelle.</span></li>
+            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg><span>Présenter une prédiction comme une vérité cadastrale. Elle doit être revue et validée.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="explicable">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Résultats explicables</span>
+        <h2>Chaque prédiction dit qui a décidé quoi, et sur quelles mesures.</h2>
+      </div>
+      <div class="two">
+        <div class="stack-col">
+          <div class="points">
+            <div><b>La chaîne de décision</b><p>La fiche montre la décision du moteur classique et son motif, puis ce qu'EADE en a fait : score, composantes, règles déclenchées avec les valeurs lues, et règles non évaluables faute de données.</p></div>
+            <div><b>Les mesures, par groupe</b><p>Les 33 caractéristiques sont rangées en six familles. Le dictionnaire donne l'unité et la normalisation de chacune, et toutes sont utilisables dans les règles.</p></div>
+            <div><b>La provenance</b><p>Chaque campagne enregistre la version du moteur classique, l'empreinte de ses paramètres, la version EADE, le mode et les rasters lus. Une prédiction est immuable.</p></div>
+          </div>
+          <div class="groups" aria-label="Familles de caractéristiques"><span>altimétrie</span><span>contexte</span><span>géométrie</span><span>spectral</span><span>texture</span><span>qualité</span></div>
+        </div>
+
+        <article class="pred" aria-label="Fiche réelle de la prédiction 13124">
+          <header><h3>Bâtiment / toiture</h3><span class="pill out">écartée</span></header>
+          <p class="meta">Prédiction #13124 · 15,2 m² · parcelle HT / 100 / 1007</p>
+          <div class="chain">
+            <div><span class="who">classique</span><span>analyse3d 2026.10.08-2 → bâtiment <b>écarté</b> : vert et courbe (arbre)</span></div>
+            <div><span class="who">EADE v1</span><span>Aucune règle ni cas validé dans la version 1 : décision du moteur classique conservée.</span></div>
+          </div>
+          <div class="feat">
+            <h4>ALTIMÉTRIE</h4>
+            <dl>
+              <dt>Hauteur médiane au-dessus du sol</dt><dd>3,66 m</dd>
+              <dt>Hauteur P90</dt><dd>4,23 m</dd>
+              <dt>Écart P90 – P25</dt><dd>0,92 m</dd>
+              <dt>Pente moyenne du MNS</dt><dd>0,72 m/m</dd>
+              <dt>Part du pourtour en mur (pente &gt; 45°)</dt><dd>0,81</dd>
+              <dt>Courbure médiane du MNS</dt><dd>0,06</dd>
+            </dl>
+            <h4>CONTEXTE</h4>
+            <dl>
+              <dt>Part de l'emprise dans sa parcelle</dt><dd>1</dd>
+              <dt>Parcelles numérotées touchées</dt><dd>1</dd>
+              <dt>Distance du centre à la limite</dt><dd>2,56 m</dd>
+            </dl>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="cycle">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Le cycle d'amélioration</span>
+        <h2>EADE apprend des experts, et ne publie jamais seul.</h2>
+        <p class="lede">Les corrections validées deviennent des exemples. Les exemples construisent une version candidate, qui doit faire ses preuves sur un jeu de test avant d'être activée.</p>
+      </div>
+      <ol class="loop">
+        <li><b>Campagne de détection</b><span>Moteur classique et version active, figée au lancement.</span></li>
+        <li data-who="opérateur"><b>Atelier</b><span>L'opérateur corrige parcelle par parcelle.</span></li>
+        <li data-who="expert"><b>Validation</b><span>L'expert cadastral confirme ou rejette.</span></li>
+        <li><b>Exemples</b><span>Rangés en apprentissage ou en test selon leur maille de 200 m.</span></li>
+        <li><b>Version candidate</b><span>Construite en brouillon à partir des seuls exemples d'apprentissage.</span></li>
+        <li data-who="qualité"><b>Simulation</b><span>Rejouée sur une campagne existante, sans rien écrire.</span></li>
+        <li data-who="qualité"><b>Évaluation</b><span>Sur le jeu de test. Si les critères ne sont pas remplis, retour à la candidate.</span></li>
+        <li data-who="responsable"><b>Publication</b><span>La version est figée et devient active pour les nouvelles campagnes.</span></li>
+      </ol>
+      <div class="callouts">
+        <div><b>Une maille sur cinq pour juger</b><p>Chaque exemple validé tombe dans un carré de 200 m. Une maille sur cinq est réservée au test : ses exemples ne servent jamais à apprendre.</p></div>
+        <div><b>Trois façons d'apprendre</b><p>Signatures moyennes par classe, recalibrage du poids des règles selon leur précision, et proposition de seuils qui isolent les faux positifs.</p></div>
+        <div><b>Retour arrière en un clic</b><p>Chaque prédiction garde le numéro de sa version. Si une version déçoit, on rétablit la précédente et l'on sait quelles prédictions revoir.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="plateforme">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Visite de la plateforme</span>
+        <h2>L'espace Détection d'eFoncier Africa.</h2>
+        <p class="lede">Cinq écrans couvrent tout le cycle : lancer, corriger, valider, régler et évaluer. Captures de la base de démonstration du 8 octobre 2026.</p>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Écrans de la plateforme">
+        <button class="tab" role="tab" id="t-campagnes" aria-controls="tour" aria-selected="true" data-k="campagnes">Campagnes</button>
+        <button class="tab" role="tab" id="t-trace" aria-controls="tour" aria-selected="false" data-k="trace">Atelier</button>
+        <button class="tab" role="tab" id="t-validation" aria-controls="tour" aria-selected="false" data-k="validation">Validation</button>
+        <button class="tab" role="tab" id="t-regles" aria-controls="tour" aria-selected="false" data-k="regles">Règles</button>
+        <button class="tab" role="tab" id="t-simulation" aria-controls="tour" aria-selected="false" data-k="simulation">Simulation</button>
+        <button class="tab" role="tab" id="t-laboratoire" aria-controls="tour" aria-selected="false" data-k="laboratoire">Laboratoire</button>
+        <button class="tab" role="tab" id="t-parametres" aria-controls="tour" aria-selected="false" data-k="parametres">Paramètres</button>
+      </div>
+      <div class="tour-pane" id="tour" role="tabpanel" aria-labelledby="t-campagnes">
+        <figure class="shot">
+          <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span id="tour-path">Détection › Campagnes de détection</span></div>
+          <img id="tour-img" src="assets/captures/campagnes.webp" width="1400" height="875" alt="">
+        </figure>
+        <div class="tour-text">
+          <span class="who" id="tour-who">Opérateur · chef d'équipe</span>
+          <h3 id="tour-title">Campagnes de détection</h3>
+          <p id="tour-body"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="atelier">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">L'atelier au clavier</span>
+        <h2>Une parcelle revue en quelques touches.</h2>
+        <p class="lede">Une correction n'efface jamais la proposition du moteur : elle s'enregistre à côté. La file peut être triée par incertitude, au hasard ou dans l'ordre du parcellaire.</p>
+      </div>
+      <div class="two">
+        <div class="scroll">
+          <table class="keys">
+            <thead><tr><th>Action</th><th>Touche</th><th>Quand</th></tr></thead>
+            <tbody>
+              <tr><td>Accepter</td><td><kbd>A</kbd></td><td>Contour et classe sont justes</td></tr>
+              <tr><td>Rejeter</td><td><kbd>R</kbd> + <kbd>1</kbd>–<kbd>8</kbd></td><td>Ce n'est pas un objet de cette classe</td></tr>
+              <tr><td>Redessiner</td><td><kbd>D</kbd></td><td>Le contour est faux</td></tr>
+              <tr><td>Scinder</td><td><kbd>S</kbd></td><td>Deux bâtiments ont été fusionnés</td></tr>
+              <tr><td>Fusionner</td><td><kbd>Maj</kbd>+clic, <kbd>F</kbd></td><td>Un bâtiment a été coupé en morceaux</td></tr>
+              <tr><td>Bâtiment manquant</td><td><kbd>B</kbd></td><td>Le moteur a oublié un bâtiment</td></tr>
+              <tr><td>Clôture manquante</td><td><kbd>L</kbd></td><td>Le moteur a oublié une clôture</td></tr>
+              <tr><td>Parcelle suivante</td><td><kbd>N</kbd> <kbd>P</kbd></td><td>Ou les flèches</td></tr>
+              <tr><td>Soumettre</td><td><kbd>Ctrl</kbd>+<kbd>Entrée</kbd></td><td>La parcelle part à l'expert</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="stack-col">
+          <div class="panel">
+            <p class="panel-title">Motifs de rejet</p>
+            <ul class="motifs">
+              <li><kbd>1</kbd>cour ou dalle au sol</li>
+              <li><kbd>2</kbd>végétation</li>
+              <li><kbd>3</kbd>ombre</li>
+              <li><kbd>4</kbd>véhicule ou objet mobile</li>
+              <li><kbd>5</kbd>appartient au voisin</li>
+              <li><kbd>6</kbd>doublon</li>
+              <li><kbd>7</kbd>chantier ou ruine</li>
+              <li><kbd>8</kbd>autre</li>
+            </ul>
+            <p style="color:var(--ink-soft);font-size:.88rem;margin-top:1rem">Le motif compte : c'est lui qui apprend au moteur pourquoi il s'est trompé.</p>
+          </div>
+          <div class="legend" aria-label="Légende de la carte de l'atelier">
+            <span><i style="background:#f2c230"></i>parcelle</span>
+            <span><i style="background:#f07c1e"></i>proposé</span>
+            <span><i style="background:repeating-linear-gradient(90deg,var(--ink-soft) 0 4px,transparent 4px 7px)"></i>écarté</span>
+            <span><i style="background:#2f9e44"></i>corrigé</span>
+            <span><i style="background:#e03131"></i>retiré ou rejeté</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="laboratoire">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Laboratoire</span>
+        <h2>Une version de bon sens peut être refusée.</h2>
+        <p class="lede">Le laboratoire juge chaque version sur le jeu de test et la compare à la version active et au moteur classique seul. Il existe pour révéler les écarts que l'intuition ne voit pas.</p>
+      </div>
+      <div class="two">
+        <div class="panel">
+          <p class="panel-title">IoU moyen sur le jeu de test, essais d'octobre 2026</p>
+          <svg class="chart" viewBox="0 0 520 210" role="img" aria-label="IoU moyen : v2 règles expertes 0,552, v1 active 0,591, candidate apprise 0,720. Seuil de publication 0,611.">
+            <!-- x scale: 0 → 0.8 maps to 170 → 490 (400 px per unit) -->
+            <g>
+              <line class="grid" x1="170" y1="12" x2="170" y2="176"/><text class="tick" x="170" y="194" text-anchor="middle">0</text>
+              <line class="grid" x1="250" y1="12" x2="250" y2="176"/><text class="tick" x="250" y="194" text-anchor="middle">0,2</text>
+              <line class="grid" x1="330" y1="12" x2="330" y2="176"/><text class="tick" x="330" y="194" text-anchor="middle">0,4</text>
+              <line class="grid" x1="410" y1="12" x2="410" y2="176"/><text class="tick" x="410" y="194" text-anchor="middle">0,6</text>
+              <line class="grid" x1="490" y1="12" x2="490" y2="176"/><text class="tick" x="490" y="194" text-anchor="middle">0,8</text>
+            </g>
+            <g class="row"><title>v2 règles expertes : IoU 0,552 (refusée)</title>
+              <text class="lab" x="0" y="40">v2 règles expertes</text><text class="sub" x="0" y="55">refusée</text>
+              <rect class="bar" x="170" y="28" width="220.8" height="24" rx="4"/>
+              <text class="val" x="396" y="45">0,552</text></g>
+            <g class="row"><title>v1 socle initial : IoU 0,591 (version active)</title>
+              <text class="lab" x="0" y="92">v1 socle initial</text><text class="sub" x="0" y="107">active</text>
+              <rect class="bar base" x="170" y="80" width="236.4" height="24" rx="4"/>
+              <text class="val" x="412" y="97">0,591</text></g>
+            <g class="row"><title>Candidate apprise : IoU 0,720</title>
+              <text class="lab" x="0" y="144">Candidate apprise</text><text class="sub" x="0" y="159">publiable</text>
+              <rect class="bar best" x="170" y="132" width="288" height="24" rx="4"/>
+              <text class="val" x="464" y="149">0,720</text></g>
+            <line class="thr" x1="414.4" y1="12" x2="414.4" y2="176"/>
+            <text class="thr-t" x="418" y="20">seuil 0,611</text>
+          </svg>
+          <div class="story" style="margin-top:1rem">
+            <b>Ce que les essais ont montré</b>
+            <p>Les règles « renvoyer en revue » de la v2, écrites par des experts, bloquaient 13 vrais bâtiments : l'IoU passait de 0,591 à 0,552. La candidate apprise l'a porté à 0,720 et a divisé les faux positifs par deux.</p>
+          </div>
+        </div>
+        <div class="stack-col">
+          <div class="panel">
+            <p class="panel-title">Pour publier une version</p>
+            <ul class="criteria">
+              <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>EADE actif, en mode administration</span></li>
+              <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Une évaluation acceptée de la version dans son état actuel, contre la version active</span></li>
+              <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Gain d'IoU moyen d'au moins +0,02 sur 20 objets de test au minimum</span></li>
+              <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Aucune hausse de l'erreur de surface ni des faux positifs</span></li>
+              <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>Une justification, inscrite au journal</span></li>
+            </ul>
+          </div>
+          <div class="scroll">
+            <table class="metrics">
+              <tbody>
+                <tr><td>IoU moyen</td><td>Recouvrement des détections justes. La mesure principale.</td><td>plus haut</td></tr>
+                <tr><td>Précision</td><td>Part des objets retenus qui sont justes</td><td>plus haut</td></tr>
+                <tr><td>Rappel</td><td>Part des objets vrais retrouvés automatiquement</td><td>plus haut</td></tr>
+                <tr><td>Erreur de surface</td><td>Écart cumulé de surface, ou de longueur pour une clôture</td><td>plus bas</td></tr>
+                <tr><td>Faux positifs</td><td>Objets retenus à tort ou au contour trop éloigné</td><td>plus bas</td></tr>
+                <tr><td>Oublis</td><td>Objets vrais non retenus, y compris ceux ajoutés à la main</td><td>plus bas</td></tr>
+                <tr><td>En revue</td><td>Le travail laissé aux opérateurs</td><td>informatif</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="garde-fous">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Garde-fous et rôles</span>
+        <h2>Ce qui ne doit jamais arriver est verrouillé en base.</h2>
+        <p class="lede">Chaque geste est inscrit dans un journal qui ne peut être ni modifié ni effacé. En cas de doute, l'arrêt d'urgence désactive EADE sur-le-champ, et le moteur classique continue seul.</p>
+      </div>
+      <div class="two">
+        <div class="scroll">
+          <table class="guards">
+            <thead><tr><th>Ce qui ne doit jamais arriver</th><th>Ce qui l'empêche</th></tr></thead>
+            <tbody>
+              <tr><td>EADE modifie un barème ou une valeur cadastrale</td><td>Aucune écriture hors des tables <span class="mono">eade_*</span></td></tr>
+              <tr><td>Une prédiction est retouchée après coup</td><td>Prédictions protégées en base</td></tr>
+              <tr><td>Le journal est altéré</td><td>Journal inaltérable en base</td></tr>
+              <tr><td>Une version publiée change</td><td>Versions publiées figées en base</td></tr>
+              <tr><td>Un exemple validé change</td><td>Exemples protégés en base</td></tr>
+              <tr><td>Une version non évaluée est publiée par erreur</td><td>Publication refusée sans évaluation acceptée de cette empreinte ; publication manuelle explicite, justifiée et marquée</td></tr>
+              <tr><td>Le jeu de test sert à apprendre</td><td>Mailles de test exclues de la construction des candidates</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <p class="panel-title">Sept permissions, des rôles séparés</p>
+          <div class="roles">
+            <div class="role"><code>EADE_VIEW</code><span><b>Tous.</b> Consulter campagnes, prédictions, connaissances et journal.</span></div>
+            <div class="role"><code>EADE_RUN</code><span><b>Opérateur, chef d'équipe.</b> Lancer, arrêter, reprendre une campagne.</span></div>
+            <div class="role"><code>EADE_REVIEW</code><span><b>Opérateur.</b> Corriger et soumettre dans l'atelier.</span></div>
+            <div class="role"><code>EADE_VALIDATE</code><span><b>Expert.</b> Valider ou rejeter les corrections soumises.</span></div>
+            <div class="role"><code>EADE_QUALITY</code><span><b>Qualité.</b> Simuler une version et l'évaluer sur le jeu de test.</span></div>
+            <div class="role"><code>EADE_PUBLISH</code><span><b>Responsable EADE.</b> Publier ou rétablir une version.</span></div>
+            <div class="role"><code>EADE_ADMIN</code><span><b>Responsable EADE.</b> Modes, règles, candidates, import, arrêt d'urgence.</span></div>
+          </div>
+          <p style="color:var(--ink-soft);font-size:.86rem;margin-top:1rem">Celui qui corrige ne devrait pas valider ses propres corrections, et celui qui construit une version ne devrait pas la publier. Le journal garde l'auteur de chaque geste.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="integrations">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Interopérabilité · objectif</span>
+        <h2>Un moteur qui s'intègre à vos outils SIG.</h2>
+        <p class="lede">EADE n'a pas vocation à devenir un logiciel SIG de plus. Le moteur doit s'intégrer aux bases, serveurs, postes de travail et cartes web en place, en parlant leurs formats et leurs standards.</p>
+      </div>
+      <div class="plugs">
+        <div class="plug"><span class="plug-k">Postes SIG</span><b>QGIS, ArcGIS Pro</b><p>Lancer une détection et corriger les objets depuis le poste de l'opérateur, par extension.</p></div>
+        <div class="plug"><span class="plug-k">Bases spatiales</span><b>PostgreSQL / PostGIS</b><p>Lire les parcelles et écrire les prédictions dans des tables géométriques ordinaires.</p></div>
+        <div class="plug"><span class="plug-k">Serveurs cartographiques</span><b>GeoServer, MapServer</b><p>Publier prédictions et corrections en flux WMS, WFS ou OGC API Features.</p></div>
+        <div class="plug"><span class="plug-k">Cartographie web</span><b>OpenLayers, Leaflet, MapLibre</b><p>Afficher décisions et scores dans n'importe quelle carte web à partir de GeoJSON.</p></div>
+        <div class="plug"><span class="plug-k">Formats</span><b>GeoTIFF, COG, GeoPackage, GeoJSON, Shapefile</b><p>Lire rasters et vecteurs à travers GDAL, sans conversion propriétaire.</p></div>
+        <div class="plug"><span class="plug-k">Chaînes de traitement</span><b>API REST, Python</b><p>Appeler le moteur depuis un script, un notebook ou un pipeline de production.</p></div>
+      </div>
+      <p class="plugs-note">Ces intégrations sont des objectifs de conception. À ce jour, EADE fonctionne intégré à eFoncier Africa.</p>
+    </div>
+  </section>
+
+  <section class="block" id="vision">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Au-delà d'eFoncier</span>
+        <h2>Le module de détection n'est que le début.</h2>
+        <p class="lede">Ce qui tourne aujourd'hui dans eFoncier Africa ne couvre qu'une partie d'EADE. Le projet vise un moteur ouvert et modulaire, capable de s'intégrer aux outils SIG, géospatiaux et cartographiques que les équipes utilisent déjà.</p>
+      </div>
+      <div class="now-next">
+        <div class="done">
+          <span class="tag">● en service dans eFoncier Africa</span>
+          <h3>Bâtiments et clôtures sur levés drone</h3>
+          <ul>
+            <li>Décision sur 33 caractéristiques, règles et similarité</li>
+            <li>Atelier de correction et validation experte</li>
+            <li>Versions de connaissance, simulation, apprentissage</li>
+            <li>Laboratoire, publication évaluée, retour arrière</li>
+            <li>Journal inaltérable et arrêt d'urgence</li>
+          </ul>
+        </div>
+        <div class="todo">
+          <span class="tag">○ en construction</span>
+          <h3>Le moteur EADE ouvert</h3>
+          <ul>
+            <li>Un cœur indépendant de toute application hôte</li>
+            <li>Des fournisseurs de détection interchangeables</li>
+            <li>De nouvelles classes : voiries, végétation, surfaces pavées</li>
+            <li>Une intégration aux outils SIG via les standards OGC et une API REST</li>
+            <li>À terme, des modèles d'apprentissage profond</li>
+          </ul>
+        </div>
+      </div>
+      <div class="modules">
+        <div class="mod"><code>eade-core</code><p>Moteurs de détection, de caractéristiques et de décision. Registre des fournisseurs.</p></div>
+        <div class="mod"><code>eade-knowledge</code><p>Règles, signatures d'objets, similarité, versions.</p></div>
+        <div class="mod"><code>eade-feedback</code><p>Corrections, circuit de revue, historique de validation.</p></div>
+        <div class="mod"><code>eade-adaptation</code><p>Analyse des retours et optimisation des règles.</p></div>
+        <div class="mod"><code>eade-geo</code><p>Raster et vecteur, segmentation, mesures spatiales.</p></div>
+        <div class="mod"><code>eade-api</code><p>API REST / JSON pour les applications hôtes.</p></div>
+        <div class="mod"><code>stack</code><p>Java 17, Spring Boot, PostgreSQL / PostGIS, GDAL, JTS.</p></div>
+        <div class="mod later"><code>eade-ml</code><p>Apprentissage automatique, prévu pour la version 3.0.</p></div>
+      </div>
+      <div class="road">
+        <article class="phase now">
+          <div class="v"><span>1.0</span><small>en cours</small></div>
+          <h3>Détection fondée sur la connaissance</h3>
+          <ul>
+            <li>Architecture modulaire et interface des fournisseurs</li>
+            <li>Règles configurables et base de connaissances versionnée</li>
+            <li>Extraction de caractéristiques et similarité</li>
+            <li>Retours humains intégrés</li>
+            <li>MVP EADE Geo et API REST documentée</li>
+          </ul>
+        </article>
+        <article class="phase">
+          <div class="v"><span>2.0</span><small>ensuite</small></div>
+          <h3>Apprentissage adaptatif</h3>
+          <ul>
+            <li>Analyse des motifs de correction</li>
+            <li>Optimisation statistique des règles</li>
+            <li>Profils de détection par zone géographique</li>
+            <li>Tests de régression sur chaque mise à jour</li>
+            <li>Tableau de bord de supervision</li>
+          </ul>
+        </article>
+        <article class="phase">
+          <div class="v"><span>3.0</span><small>plus tard</small></div>
+          <h3>Machine learning</h3>
+          <ul>
+            <li>Modèles entraînés sur les corrections validées</li>
+            <li>Gestion des versions de modèles</li>
+            <li>Segmentation par réseau de neurones</li>
+            <li>Détection hybride règles et ML</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="id">
+      <img src="assets/eade-logo.png" alt="Logo EADE, eFoncier Adaptive Detection Engine" width="120" height="111">
+      <div>
+        <p class="motto">Apprendre des corrections. Évoluer par la connaissance.</p>
+        <p>Captures issues de la base de démonstration d'eFoncier Africa. La licence du moteur ouvert sera publiée avant la première version du code ; d'ici là, la visibilité du dépôt n'autorise pas sa réutilisation.</p>
+      </div>
+    </div>
+    <a class="btn" href="https://github.com/genidigital/EADE" target="_blank" rel="noopener">github.com/genidigital/EADE</a>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var S = {
+    campagnes: { path: "Détection › Campagnes de détection", who: "Opérateur · chef d'équipe", title: "Campagnes de détection",
+      body: "Une campagne avance îlot par îlot sur une sous-préfecture, une section ou un seul îlot. Le suivi affiche la provenance (moteur classique, version EADE, rasters lus), le décompte des décisions et les prédictions sur l'orthophoto. Ici : 52 îlots, 1 883 retenues et 334 écartées.",
+      alt: "Écran Campagnes de détection : formulaire de lancement, historique et suivi de la campagne Lot 6 avec ses prédictions sur l'orthophoto." },
+    trace: { path: "Détection › Atelier de correction", who: "Opérateur SIG · EADE_REVIEW", title: "Tracer un bâtiment manquant",
+      body: "Touche B, puis cliquer les sommets : la surface s'affiche en direct. Les sommets s'accrochent aux limites de parcelle et aux autres objets, ce qui aide pour les murs mitoyens. Redessiner, scinder et fusionner suivent le même principe.",
+      alt: "Atelier de correction : tracé d'un bâtiment manquant de 689 m² sur l'orthophoto de la parcelle HT / 112 / 1091." },
+    validation: { path: "Détection › Atelier › Validation", who: "Expert cadastral · EADE_VALIDATE", title: "Valider les corrections",
+      body: "La file ne montre que les parcelles avec des corrections soumises. Chaque correction est listée avec l'avant et l'après, l'auteur et la date. Une correction validée est définitive et, en mode collecte, devient un exemple d'apprentissage.",
+      alt: "Mode validation de l'atelier : une correction Redessiné de 236,94 à 194,88 m² en attente, avec un champ de justification obligatoire." },
+    regles: { path: "Détection › Connaissances › Règles", who: "Responsable EADE", title: "Des règles lisibles en français",
+      body: "Chaque règle a un effet (confirmer, écarter, renvoyer en revue, reclasser), une condition, une priorité et un poids. Une donnée manquante rend la règle non évaluable, et chaque modification exige une justification.",
+      alt: "Liste des règles de la version 2, avec effet, condition en français, classe concernée et priorité." },
+    simulation: { path: "Détection › Connaissances › Simulation", who: "Qualité · EADE_QUALITY", title: "Simuler avant de publier",
+      body: "La simulation rejoue une version, même en brouillon, sur les prédictions d'une campagne sans rien écrire. Ici, la v2 rejouée sur 2 217 prédictions change 413 décisions (19 %), dont 118 retenues renvoyées en revue.",
+      alt: "Simulation de la version 2 : 2 217 prédictions rejouées, 413 décisions changées, passages entre décisions et règles déclenchées." },
+    laboratoire: { path: "Détection › Laboratoire", who: "Qualité · responsable EADE", title: "Laboratoire de versions",
+      body: "Le laboratoire suit l'activité (objets analysés, corrections, taille du jeu de test, délai de correction), le verdict de chaque version et les règles de publication. Une publication manuelle reste possible, justifiée et marquée.",
+      alt: "Laboratoire de versions : indicateurs d'activité, versions v1 et v2, boutons d'évaluation et de publication, règles de publication." },
+    parametres: { path: "Détection › Paramètres EADE", who: "Responsable EADE", title: "Interrupteur, mode et santé",
+      body: "EADE s'active ou se désactive sans toucher à la détection classique. Trois modes : lecture seule, collecte (les corrections validées deviennent des exemples) et administration. La santé du moteur classique et l'arrêt d'urgence sont sur le même écran.",
+      alt: "Paramètres EADE : état du moteur adaptatif, choix du mode, seuils de publication, santé du service et arrêt d'urgence." }
+  };
+  var tabs = document.querySelectorAll('.tab');
+  var pane = document.getElementById('tour');
+  var img = document.getElementById('tour-img');
+  function show(k, focus) {
+    var s = S[k]; if (!s) return;
+    tabs.forEach(function (t) {
+      var on = t.dataset.k === k;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      if (on) { pane.setAttribute('aria-labelledby', t.id); if (focus) t.focus(); }
+    });
+    img.src = 'assets/captures/' + k + '.webp';
+    img.alt = s.alt;
+    document.getElementById('tour-path').textContent = s.path;
+    document.getElementById('tour-who').textContent = s.who;
+    document.getElementById('tour-title').textContent = s.title;
+    document.getElementById('tour-body').textContent = s.body;
+  }
+  tabs.forEach(function (t, i) {
+    t.addEventListener('click', function () { show(t.dataset.k); });
+    t.addEventListener('keydown', function (e) {
+      var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      show(tabs[(i + d + tabs.length) % tabs.length].dataset.k, true);
+    });
+  });
+  show('campagnes');
+  Object.keys(S).forEach(function (k) { var p = new Image(); p.src = 'assets/captures/' + k + '.webp'; });
+})();
+</script>
+</body>
+</html>
